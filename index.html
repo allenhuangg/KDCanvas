@@ -9,11 +9,23 @@
         input, button { padding: 8px; font-size: 14px; background: #333; color: white; border: 1px solid #555; }
         button { cursor: pointer; }
         button:hover { background: #555; }
-        .main-content { display: flex; gap: 20px; width: 100%; max-width: 800px; justify-content: center; }
-        .sidebar { display: flex; flex-direction: column; gap: 10px; width: 250px; background: #222; padding: 15px; border: 2px solid #444; }
-        .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; justify-content: space-between; align-items: center; }
+        .main-content { display: flex; gap: 20px; width: 100%; max-width: 1000px; justify-content: center; }
+        .sidebar { display: flex; flex-direction: column; gap: 10px; width: 250px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 500px; }
+        .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; flex-direction: column; gap: 5px; }
         .match-item label { cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 13px;}
-        #mapCanvas { background-color: #222; border: 2px solid #555; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); }
+        .player-card { display: flex; align-items: center; gap: 10px; background: #333; padding: 8px; border: 1px solid #555; }
+        .player-card img { width: 35px; height: 35px; border-radius: 50%; }
+        .player-info { display: flex; flex-direction: column; font-size: 12px; }
+        .player-name { font-weight: bold; }
+        .player-kda { color: #aaa; }
+        #mapCanvas { 
+            background-color: #000; 
+            border: 2px solid #555; 
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            /* Standard Summoner's Rift Asset */
+            background-image: url('https://ddragon.leagueoflegends.com/cdn/6.8.1/img/map/map11.png');
+            background-size: cover;
+        }
         #status { margin-bottom: 20px; font-family: monospace; color: #aaa; text-align: center; }
     </style>
 </head>
@@ -32,6 +44,9 @@
 <div class="main-content">
     <div class="sidebar" id="matchList"></div>
     <canvas id="mapCanvas" width="500" height="500"></canvas>
+    <div class="sidebar" id="playerList">
+        <div style="color: #777; text-align: center; font-size: 13px;">Select 'View Players' on a match</div>
+    </div>
 </div>
 
 <script>
@@ -48,6 +63,7 @@
         const tagLine = document.getElementById('tagLine').value;
         const status = document.getElementById('status');
         const matchListDiv = document.getElementById('matchList');
+        const playerListDiv = document.getElementById('playerList');
 
         if (!gameName || !tagLine) {
             status.innerText = "Error: Input required.";
@@ -56,11 +72,11 @@
 
         matchData = {};
         matchListDiv.innerHTML = '';
+        playerListDiv.innerHTML = '<div style="color: #777; text-align: center; font-size: 13px;">Select \'View Players\' on a match</div>';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         try {
             status.innerText = "Fetching PUUID...";
-            // Relative routing implemented here
             const accountRes = await fetch(`/api/account/${gameName}/${tagLine}`);
             const accountData = await accountRes.json();
             if (!accountData.puuid) throw new Error(`API Error: ${JSON.stringify(accountData)}`);
@@ -70,12 +86,18 @@
             const matchRes = await fetch(`/api/matches/${puuid}`);
             const matchIds = await matchRes.json();
 
-            status.innerText = `Fetching Timelines for ${matchIds.length} matches...`;
+            status.innerText = `Fetching Metadata and Timelines...`;
             
             for (let i = 0; i < matchIds.length; i++) {
                 const matchId = matchIds[i];
-                matchData[matchId] = { kills: [], deaths: [], active: true };
+                matchData[matchId] = { kills: [], deaths: [], active: true, participants: [] };
 
+                // Fetch full match data for KDA and Champions
+                const detailsRes = await fetch(`/api/match/${matchId}`);
+                const details = await detailsRes.json();
+                matchData[matchId].participants = details.info.participants;
+
+                // Fetch timeline for coordinates
                 const timelineRes = await fetch(`/api/timeline/${matchId}`);
                 const timeline = await timelineRes.json();
 
@@ -95,10 +117,13 @@
                 const div = document.createElement('div');
                 div.className = 'match-item';
                 div.innerHTML = `
-                    <span>Match ${i + 1}</span>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Match ${i + 1}</span>
+                        <button onclick="loadPlayers('${matchId}')" style="padding: 2px 5px; font-size: 11px;">View Players</button>
+                    </div>
                     <label>
                         <input type="checkbox" checked onchange="toggleMatch('${matchId}', this.checked)">
-                        Visible
+                        Map Visible
                     </label>
                 `;
                 matchListDiv.appendChild(div);
@@ -110,6 +135,27 @@
         } catch (error) {
             status.innerText = "Execution failed: " + error.message;
         }
+    }
+
+    function loadPlayers(matchId) {
+        const playerListDiv = document.getElementById('playerList');
+        playerListDiv.innerHTML = `<div style="margin-bottom: 10px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 5px;">Match Players</div>`;
+        
+        matchData[matchId].participants.forEach(p => {
+            const riotId = p.riotIdGameName ? `${p.riotIdGameName}#${p.riotIdTagline}` : p.summonerName;
+            const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${p.championId}.png`;
+            
+            const pDiv = document.createElement('div');
+            pDiv.className = 'player-card';
+            pDiv.innerHTML = `
+                <img src="${iconUrl}" alt="Champ">
+                <div class="player-info">
+                    <span class="player-name">${riotId}</span>
+                    <span class="player-kda">KDA: ${p.kills}/${p.deaths}/${p.assists}</span>
+                </div>
+            `;
+            playerListDiv.appendChild(pDiv);
+        });
     }
 
     function toggleGlobal(type) {

@@ -5,15 +5,12 @@ const path = require('path');
 
 const app = express();
 app.use(cors());
-
-// Serve static files from the current directory (index.html)
 app.use(express.static(__dirname));
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY; 
 const REGION = 'americas'; 
 const headers = { 'X-Riot-Token': RIOT_API_KEY };
 
-// Root route to serve the frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -27,6 +24,12 @@ app.get('/api/account/:gameName/:tagLine', async (req, res) => {
 
 app.get('/api/matches/:puuid', async (req, res) => {
     const url = `https://${REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${req.params.puuid}/ids?count=5`;
+    const response = await fetch(url, { headers });
+    res.status(response.status).json(await response.json());
+});
+
+app.get('/api/match/:matchId', async (req, res) => {
+    const url = `https://${REGION}.api.riotgames.com/lol/match/v5/matches/${req.params.matchId}`;
     const response = await fetch(url, { headers });
     res.status(response.status).json(await response.json());
 });
