@@ -9,21 +9,35 @@
         input, button { padding: 8px; font-size: 14px; background: #333; color: white; border: 1px solid #555; }
         button { cursor: pointer; }
         button:hover { background: #555; }
-        .main-content { display: flex; gap: 20px; width: 100%; max-width: 1000px; justify-content: center; }
-        .sidebar { display: flex; flex-direction: column; gap: 10px; width: 250px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 500px; }
+        .main-content { display: flex; gap: 20px; width: 100%; max-width: 1200px; justify-content: center; align-items: flex-start; }
+        .sidebar { display: flex; flex-direction: column; gap: 10px; width: 280px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 550px; }
         .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; flex-direction: column; gap: 5px; }
         .match-item label { cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 13px;}
-        .player-card { display: flex; align-items: center; gap: 10px; background: #333; padding: 8px; border: 1px solid #555; }
-        .player-card img { width: 35px; height: 35px; border-radius: 50%; }
+        
+        /* Team Sidebar Structuring */
+        .team-container { border: 1px solid #444; border-radius: 4px; padding: 8px; margin-bottom: 10px; }
+        .team-blue { border-color: rgba(0, 100, 255, 0.5); background: rgba(0, 50, 150, 0.05); }
+        .team-red { border-color: rgba(255, 0, 50, 0.5); background: rgba(150, 0, 30, 0.05); }
+        .team-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; margin-bottom: 8px; font-weight: bold; }
+        
+        /* Expanded Player Card styling */
+        .player-card { display: flex; flex-direction: column; gap: 6px; background: #2a2a2a; padding: 8px; border: 1px solid #444; margin-bottom: 5px; border-radius: 4px; }
+        .player-header { display: flex; align-items: center; gap: 8px; }
+        .player-header img { width: 28px; height: 28px; border-radius: 50%; }
         .player-info { display: flex; flex-direction: column; font-size: 12px; }
-        .player-name { font-weight: bold; }
+        .player-name { font-weight: bold; width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .player-kda { color: #aaa; }
+        
+        .player-casts { font-size: 10px; color: #bbb; border-top: 1px solid #3d3d3d; padding-top: 4px; display: flex; justify-content: space-between; }
+        .player-toggles { display: flex; gap: 10px; font-size: 11px; margin-top: 2px; }
+        .player-toggles label { cursor: pointer; display: flex; align-items: center; gap: 3px; }
+
         #mapCanvas { 
-            background-color: #000; 
+            background-color: #0d1a24; 
             border: 2px solid #555; 
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-            /* Standard Summoner's Rift Asset */
-            background-image: url('https://ddragon.leagueoflegends.com/cdn/6.8.1/img/map/map11.png');
+            /* OP.GG styled map assignment */
+            background-image: url('opgg_map.png');
             background-size: cover;
         }
         #status { margin-bottom: 20px; font-family: monospace; color: #aaa; text-align: center; }
@@ -57,6 +71,10 @@
     let matchData = {}; 
     let showKills = true;
     let showDeaths = true;
+    
+    let currentPuuid = '';
+    let activeDetailedMatchId = null;
+    let playerHeatmapToggles = {}; // Track active heatmaps per participantId in detailed mode
 
     async function fetchData() {
         const gameName = document.getElementById('gameName').value;
@@ -71,6 +89,7 @@
         }
 
         matchData = {};
+        activeDetailedMatchId = null;
         matchListDiv.innerHTML = '';
         playerListDiv.innerHTML = '<div style="color: #777; text-align: center; font-size: 13px;">Select \'View Players\' on a match</div>';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -80,34 +99,49 @@
             const accountRes = await fetch(`/api/account/${gameName}/${tagLine}`);
             const accountData = await accountRes.json();
             if (!accountData.puuid) throw new Error(`API Error: ${JSON.stringify(accountData)}`);
-            const puuid = accountData.puuid;
+            currentPuuid = accountData.puuid;
 
             status.innerText = "Fetching Match List...";
-            const matchRes = await fetch(`/api/matches/${puuid}`);
+            const matchRes = await fetch(`/api/matches/${currentPuuid}`);
             const matchIds = await matchRes.json();
 
             status.innerText = `Fetching Metadata and Timelines...`;
             
             for (let i = 0; i < matchIds.length; i++) {
                 const matchId = matchIds[i];
-                matchData[matchId] = { kills: [], deaths: [], active: true, participants: [] };
+                matchData[matchId] = { kills: [], deaths: [], active: true, participants: [], playerEvents: {} };
 
-                // Fetch full match data for KDA and Champions
+                // Fetch match stats (KDA and Spells)
                 const detailsRes = await fetch(`/api/match/${matchId}`);
                 const details = await detailsRes.json();
                 matchData[matchId].participants = details.info.participants;
 
-                // Fetch timeline for coordinates
+                // Fetch match timeline coordinates
                 const timelineRes = await fetch(`/api/timeline/${matchId}`);
                 const timeline = await timelineRes.json();
 
-                const participantInfo = timeline.info.participants.find(p => p.puuid === puuid);
+                const participantInfo = timeline.info.participants.find(p => p.puuid === currentPuuid);
                 if (!participantInfo) continue;
                 const participantId = participantInfo.participantId;
+
+                // Initialize tracking maps for all 10 players
+                for (let pId = 1; pId <= 10; pId++) {
+                    matchData[matchId].playerEvents[pId] = { kills: [], deaths: [] };
+                }
 
                 timeline.info.frames.forEach(frame => {
                     frame.events.forEach(event => {
                         if (event.type === 'CHAMPION_KILL' && event.position) {
+                            const kId = event.killerId;
+                            const vId = event.victimId;
+                            if (kId && matchData[matchId].playerEvents[kId]) {
+                                matchData[matchId].playerEvents[kId].kills.push(event.position);
+                            }
+                            if (vId && matchData[matchId].playerEvents[vId]) {
+                                matchData[matchId].playerEvents[vId].deaths.push(event.position);
+                            }
+
+                            // Populate general array for main searched player
                             if (event.killerId === participantId) matchData[matchId].kills.push(event.position);
                             if (event.victimId === participantId) matchData[matchId].deaths.push(event.position);
                         }
@@ -138,27 +172,93 @@
     }
 
     function loadPlayers(matchId) {
-        const playerListDiv = document.getElementById('playerList');
-        playerListDiv.innerHTML = `<div style="margin-bottom: 10px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 5px;">Match Players</div>`;
+        activeDetailedMatchId = matchId;
+        playerHeatmapToggles = {};
         
-        matchData[matchId].participants.forEach(p => {
+        // Find searched player to set them checked by default
+        const searchedPlayer = matchData[matchId].participants.find(p => p.puuid === currentPuuid);
+        const searchedId = searchedPlayer ? searchedPlayer.participantId : null;
+        
+        for (let pId = 1; pId <= 10; pId++) {
+            playerHeatmapToggles[pId] = {
+                kills: pId === searchedId,
+                deaths: pId === searchedId
+            };
+        }
+        
+        renderSidebarPlayers(matchId);
+        renderCanvas();
+    }
+
+    function renderSidebarPlayers(matchId) {
+        const playerListDiv = document.getElementById('playerList');
+        playerListDiv.innerHTML = `<div style="margin-bottom: 10px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 5px; text-align: center;">Match Players</div>`;
+        
+        const participants = matchData[matchId].participants;
+        
+        const blueTeam = participants.filter(p => p.teamId === 100);
+        const redTeam = participants.filter(p => p.teamId === 200);
+        
+        const blueContainer = document.createElement('div');
+        blueContainer.className = 'team-container team-blue';
+        blueContainer.innerHTML = `<div class="team-title">Blue Team (Box 1)</div>`;
+        
+        const redContainer = document.createElement('div');
+        redContainer.className = 'team-container team-red';
+        redContainer.innerHTML = `<div class="team-title">Red Team (Box 2)</div>`;
+        
+        function createPlayerCard(p) {
             const riotId = p.riotIdGameName ? `${p.riotIdGameName}#${p.riotIdTagline}` : p.summonerName;
             const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${p.championId}.png`;
             
-            const pDiv = document.createElement('div');
-            pDiv.className = 'player-card';
-            pDiv.innerHTML = `
-                <img src="${iconUrl}" alt="Champ">
-                <div class="player-info">
-                    <span class="player-name">${riotId}</span>
-                    <span class="player-kda">KDA: ${p.kills}/${p.deaths}/${p.assists}</span>
+            const card = document.createElement('div');
+            card.className = 'player-card';
+            
+            const pId = p.participantId;
+            const kChecked = playerHeatmapToggles[pId].kills ? 'checked' : '';
+            const dChecked = playerHeatmapToggles[pId].deaths ? 'checked' : '';
+            
+            card.innerHTML = `
+                <div class="player-header">
+                    <img src="${iconUrl}" alt="Champ">
+                    <div class="player-info">
+                        <span class="player-name" title="${riotId}">${riotId}</span>
+                        <span class="player-kda">KDA: ${p.kills}/${p.deaths}/${p.assists}</span>
+                    </div>
+                </div>
+                <div class="player-casts" title="Spells Cast">
+                    <span>Q: ${p.spell1Casts || 0}</span>
+                    <span>W: ${p.spell2Casts || 0}</span>
+                    <span>E: ${p.spell3Casts || 0}</span>
+                    <span>R: ${p.spell4Casts || 0}</span>
+                </div>
+                <div class="player-toggles">
+                    <label><input type="checkbox" ${kChecked} onchange="togglePlayerHeatmap(${pId}, 'kills', this.checked)"> K</label>
+                    <label><input type="checkbox" ${dChecked} onchange="togglePlayerHeatmap(${pId}, 'deaths', this.checked)"> D</label>
                 </div>
             `;
-            playerListDiv.appendChild(pDiv);
-        });
+            return card;
+        }
+        
+        blueTeam.forEach(p => blueContainer.appendChild(createPlayerCard(p)));
+        redTeam.forEach(p => redContainer.appendChild(createPlayerCard(p)));
+        
+        playerListDiv.appendChild(blueContainer);
+        playerListDiv.appendChild(redContainer);
+    }
+
+    function togglePlayerHeatmap(participantId, type, isChecked) {
+        if (playerHeatmapToggles[participantId]) {
+            playerHeatmapToggles[participantId][type] = isChecked;
+            renderCanvas();
+        }
     }
 
     function toggleGlobal(type) {
+        // Drop detail mode to return to general view if globally toggled
+        activeDetailedMatchId = null; 
+        document.getElementById('playerList').innerHTML = '<div style="color: #777; text-align: center; font-size: 13px;">Select \'View Players\' on a match</div>';
+        
         if (type === 'kills') showKills = !showKills;
         if (type === 'deaths') showDeaths = !showDeaths;
         renderCanvas();
@@ -174,16 +274,42 @@
     function renderCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        Object.values(matchData).forEach(match => {
-            if (!match.active) return;
+        if (activeDetailedMatchId) {
+            // Detailed mode: Draw checked coordinates colored by team assignment
+            const match = matchData[activeDetailedMatchId];
+            if (!match) return;
             
-            if (showDeaths) {
-                match.deaths.forEach(pos => drawPoint(pos.x, pos.y, 'rgba(255, 0, 0, 0.8)'));
-            }
-            if (showKills) {
-                match.kills.forEach(pos => drawPoint(pos.x, pos.y, 'rgba(0, 255, 0, 0.8)'));
-            }
-        });
+            Object.keys(playerHeatmapToggles).forEach(pId => {
+                const toggles = playerHeatmapToggles[pId];
+                const events = match.playerEvents[pId];
+                const participant = match.participants.find(p => p.participantId == pId);
+                
+                if (!events || !participant) return;
+                
+                const isBlueTeam = participant.teamId === 100;
+                const killColor = isBlueTeam ? 'rgba(0, 150, 255, 0.85)' : 'rgba(255, 50, 50, 0.85)';
+                const deathColor = isBlueTeam ? 'rgba(0, 50, 150, 0.85)' : 'rgba(150, 0, 0, 0.85)';
+                
+                if (toggles.kills) {
+                    events.kills.forEach(pos => drawPoint(pos.x, pos.y, killColor));
+                }
+                if (toggles.deaths) {
+                    events.deaths.forEach(pos => drawPoint(pos.x, pos.y, deathColor));
+                }
+            });
+        } else {
+            // General mode: Render checked matches for the primary searched user
+            Object.values(matchData).forEach(match => {
+                if (!match.active) return;
+                
+                if (showDeaths) {
+                    match.deaths.forEach(pos => drawPoint(pos.x, pos.y, 'rgba(255, 0, 0, 0.8)'));
+                }
+                if (showKills) {
+                    match.kills.forEach(pos => drawPoint(pos.x, pos.y, 'rgba(0, 255, 0, 0.8)'));
+                }
+            });
+        }
     }
 
     function drawPoint(riotX, riotY, color) {
