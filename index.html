@@ -14,8 +14,11 @@
         .main-content { display: flex; gap: 20px; width: 100%; max-width: 1400px; justify-content: center; align-items: flex-start; }
         .sidebar { display: flex; flex-direction: column; gap: 10px; width: 230px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 550px; }
         
-        .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; flex-direction: column; gap: 8px; }
-        .match-meta { display: flex; justify-content: space-between; font-size: 13px; align-items: center;}
+        /* Updated Left Sidebar Card Layout */
+        .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; flex-direction: column; gap: 6px; }
+        .match-meta { display: flex; justify-content: space-between; font-size: 13px; align-items: center; border-bottom: 1px solid #444; padding-bottom: 4px; }
+        .match-card-info { display: flex; align-items: center; gap: 8px; font-size: 11px; margin-top: 2px; }
+        .match-card-info img { width: 22px; height: 22px; border-radius: 50%; border: 1px solid #555; }
         
         /* Side-by-Side Player Panel Layout */
         .player-list-container { display: flex; gap: 10px; width: 560px; min-height: 500px; }
@@ -89,10 +92,7 @@
             return;
         }
 
-        // Cancel previous queue logic
         queueActive = false;
-
-        // Reset state
         matchData = {};
         matchIdsList = [];
         activeDetailedMatchId = null;
@@ -113,7 +113,7 @@
 
             status.innerText = "Match list compiled. Executing background queue...";
             
-            // Generate skeleton HTML elements instantly
+            // Build skeleton containers with descriptive state blocks
             for (let i = 0; i < matchIdsList.length; i++) {
                 const matchId = matchIdsList[i];
                 const div = document.createElement('div');
@@ -124,12 +124,14 @@
                         <span>Match ${i + 1}</span>
                         <span id="badge-${matchId}" style="color: #aaa; font-size: 11px; font-weight: bold;">Loading...</span>
                     </div>
+                    <div class="match-card-info" id="info-${matchId}">
+                        <span style="color: #777;">Pending data...</span>
+                    </div>
                     <button id="btn-${matchId}" disabled onclick="displayMatchData('${matchId}')" style="padding: 4px 8px; font-size: 11px; width: 100%;">View Match</button>
                 `;
                 matchListDiv.appendChild(div);
             }
 
-            // Start background queue processing
             queueActive = true;
             processQueue(0);
 
@@ -138,7 +140,6 @@
         }
     }
 
-    // Sequential Queue Processing with 500ms Throttle Delay
     async function processQueue(index) {
         if (!queueActive || index >= matchIdsList.length) {
             if (queueActive) {
@@ -187,27 +188,55 @@
                 });
             });
 
-            // Find match result to generate side-bar badges
             const targetPlayerStats = details.info.participants.find(p => p.puuid === currentPuuid);
             const isWin = targetPlayerStats ? targetPlayerStats.win : false;
             
-            // Update match element UI state
+            // Render WIN/LOSS status
             const badge = document.getElementById(`badge-${matchId}`);
             if (badge) {
                 badge.innerHTML = isWin 
                     ? '<span style="color: #57ca85;">WIN</span>' 
                     : '<span style="color: #e25c5c;">LOSS</span>';
             }
+
+            // Hydrate player card with champion avatar and individual KDA metrics
+            const infoDiv = document.getElementById(`info-${matchId}`);
+            if (infoDiv && targetPlayerStats) {
+                const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${targetPlayerStats.championId}.png`;
+                const divisor = Math.max(1, targetPlayerStats.deaths);
+                const rawKda = (targetPlayerStats.kills + targetPlayerStats.assists) / divisor;
+                const decimalKda = rawKda.toFixed(2);
+
+                let kdaColor = '#aaa';
+                if (targetPlayerStats.deaths > 0) {
+                    if (rawKda >= 4.0) kdaColor = '#e5c158'; 
+                    else if (rawKda >= 3.0) kdaColor = '#57ca85'; 
+                    else if (rawKda >= 2.0) kdaColor = '#e29b3f'; 
+                    else kdaColor = '#e25c5c'; 
+                } else if (targetPlayerStats.kills + targetPlayerStats.assists > 0) {
+                    kdaColor = '#e5c158'; 
+                }
+
+                infoDiv.innerHTML = `
+                    <img src="${iconUrl}" alt="Champ">
+                    <span>
+                        ${targetPlayerStats.kills}/${targetPlayerStats.deaths}/${targetPlayerStats.assists}
+                        <span style="color: ${kdaColor}; font-weight: bold; margin-left: 3px;">(${decimalKda})</span>
+                    </span>
+                `;
+            }
+
             const btn = document.getElementById(`btn-${matchId}`);
             if (btn) btn.disabled = false;
 
         } catch (e) {
             const badge = document.getElementById(`badge-${matchId}`);
             if (badge) badge.innerHTML = '<span style="color: #999;">ERROR</span>';
+            const infoDiv = document.getElementById(`info-${matchId}`);
+            if (infoDiv) infoDiv.innerHTML = '<span style="color: #777;">Fetch failed</span>';
             console.error(`Queue failure on match index ${index}:`, e);
         }
 
-        // Loop to next item in queue after 500ms delay
         setTimeout(() => processQueue(index + 1), 500);
     }
 
