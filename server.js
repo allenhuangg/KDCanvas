@@ -1,14 +1,22 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 
-// Secure environment variable mapping
+// Serve static files from the current directory (index.html)
+app.use(express.static(__dirname));
+
 const RIOT_API_KEY = process.env.RIOT_API_KEY; 
 const REGION = 'americas'; 
 const headers = { 'X-Riot-Token': RIOT_API_KEY };
+
+// Root route to serve the frontend
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 app.get('/api/account/:gameName/:tagLine', async (req, res) => {
     const { gameName, tagLine } = req.params;
@@ -29,6 +37,5 @@ app.get('/api/timeline/:matchId', async (req, res) => {
     res.status(response.status).json(await response.json());
 });
 
-// Render dynamically assigns port 10000; fallback to 3000 for local testing
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
