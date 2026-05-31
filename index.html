@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>KDCanvas</title>
+    <style>
+        body { background-color: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .top-bar { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        input, button { padding: 8px; font-size: 14px; background: #333; color: white; border: 1px solid #555; }
+        button { cursor: pointer; }
+        button:hover { background: #555; }
+        .main-content { display: flex; gap: 20px; width: 100%; max-width: 800px; justify-content: center; }
+        .sidebar { display: flex; flex-direction: column; gap: 10px; width: 250px; background: #222; padding: 15px; border: 2px solid #444; }
+        .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; justify-content: space-between; align-items: center; }
+        .match-item label { cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 13px;}
+        #mapCanvas { background-color: #222; border: 2px solid #555; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); }
+        #status { margin-bottom: 20px; font-family: monospace; color: #aaa; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <input type="text" id="gameName" placeholder="Game Name">
+    <input type="text" id="tagLine" placeholder="Tagline">
+    <button onclick="fetchData()">Generate Data</button>
+    <button onclick="toggleGlobal('kills')">Toggle All Kills (Green)</button>
+    <button onclick="toggleGlobal('deaths')">Toggle All Deaths (Red)</button>
+</div>
+
+<div id="status">Awaiting input...</div>
+
+<div class="main-content">
+    <div class="sidebar" id="matchList"></div>
+    <canvas id="mapCanvas" width="500" height="500"></canvas>
+</div>
+
+<script>
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+    const RIOT_MAP_MAX = 15000; 
+
+    let matchData = {}; 
+    let showKills = true;
+    let showDeaths = true;
+
+    async function fetchData() {
+        const gameName = document.getElementById('gameName').value;
+        const tagLine = document.getElementById('tagLine').value;
+        const status = document.getElementById('status');
+        const matchListDiv = document.getElementById('matchList');
+
+        if (!gameName || !tagLine) {
+            status.innerText = "Error: Input required.";
+            return;
+        }
+
+        matchData = {};
+        matchListDiv.innerHTML = '';
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        try {
+            status.innerText = "Fetching PUUID...";
+            // Relative routing implemented here
+            const accountRes = await fetch(`/api/account/${gameName}/${tagLine}`);
+            const accountData = await accountRes.json();
+            if (!accountData.puuid) throw new Error(`API Error: ${JSON.stringify(accountData)}`);
+            const puuid = accountData.puuid;
+
+            status.innerText = "Fetching Match List...";
+            const matchRes = await fetch(`/api/matches/${puuid}`);
+            const matchIds = await matchRes.json();
+
+            status.innerText = `Fetching Timelines for ${matchIds.length} matches...`;
+            
+            for (let i = 0; i < matchIds.length; i++) {
+                const matchId = matchIds[i];
+                matchData[matchId] = { kills: [], deaths: [], active: true };
+
+                const timelineRes = await fetch(`/api/timeline/${matchId}`);
+                const timeline = await timelineRes.json();
+
+                const participantInfo = timeline.info.participants.find(p => p.puuid === puuid);
+                if (!participantInfo) continue;
+                const participantId = participantInfo.participantId;
+
+                timeline.info.frames.forEach(frame => {
+                    frame.events.forEach(event => {
+                        if (event.type === 'CHAMPION_KILL' && event.position) {
+                            if (event.killerId === participantId) matchData[matchId].kills.push(event.position);
+                            if (event.victimId === participantId) matchData[matchId].deaths.push(event.position);
+                        }
+                    });
+                });
+
+                const div = document.createElement('div');
+                div.className = 'match-item';
+                div.innerHTML = `
+                    <span>Match ${i + 1}</span>
+                    <label>
+                        <input type="checkbox" checked onchange="toggleMatch('${matchId}', this.checked)">
+                        Visible
+                    </label>
+                `;
+                matchListDiv.appendChild(div);
+            }
+
+            status.innerText = "Data compiled successfully.";
+            renderCanvas();
+
+        } catch (error) {
+            status.innerText = "Execution failed: " + error.message;
+        }
+    }
+
+    function toggleGlobal(type) {
+        if (type === 'kills') showKills = !showKills;
+        if (type === 'deaths') showDeaths = !showDeaths;
+        renderCanvas();
+    }
+
+    function toggleMatch(matchId, isVisible) {
+        if (matchData[matchId]) {
+            matchData[matchId].active = isVisible;
+            renderCanvas();
+        }
+    }
+
+    function renderCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        Object.values(matchData).forEach(match => {
+            if (!match.active) return;
+            
+            if (showDeaths) {
+                match.deaths.forEach(pos => drawPoint(pos.x, pos.y, 'rgba(255, 0, 0, 0.8)'));
+            }
+            if (showKills) {
+                match.kills.forEach(pos => drawPoint(pos.x, pos.y, 'rgba(0, 255, 0, 0.8)'));
+            }
+        });
+    }
+
+    function drawPoint(riotX, riotY, color) {
+        const pixelX = (riotX / RIOT_MAP_MAX) * canvas.width;
+        const pixelY = canvas.height - ((riotY / RIOT_MAP_MAX) * canvas.height);
+
+        ctx.beginPath();
+        ctx.arc(pixelX, pixelY, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+</script>
+
+</body>
+</html>
