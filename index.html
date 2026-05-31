@@ -8,25 +8,29 @@
         .top-bar { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         input, button { padding: 8px; font-size: 14px; background: #333; color: white; border: 1px solid #555; }
         button { cursor: pointer; }
-        button:hover { background: #555; }
-        .main-content { display: flex; gap: 20px; width: 100%; max-width: 1200px; justify-content: center; align-items: flex-start; }
-        .sidebar { display: flex; flex-direction: column; gap: 10px; width: 280px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 550px; }
-        .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; flex-direction: column; gap: 5px; }
-        .match-item label { cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 13px;}
+        button:hover:not(:disabled) { background: #555; }
+        button:disabled { cursor: not-allowed; opacity: 0.5; }
         
-        /* Team Sidebar Structuring */
-        .team-container { border: 1px solid #444; border-radius: 4px; padding: 8px; margin-bottom: 10px; }
+        .main-content { display: flex; gap: 20px; width: 100%; max-width: 1400px; justify-content: center; align-items: flex-start; }
+        .sidebar { display: flex; flex-direction: column; gap: 10px; width: 230px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 550px; }
+        
+        .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; flex-direction: column; gap: 8px; }
+        .match-meta { display: flex; justify-content: space-between; font-size: 13px; align-items: center;}
+        
+        /* Side-by-Side Player Panel Layout */
+        .player-list-container { display: flex; gap: 10px; width: 560px; min-height: 500px; }
+        .team-container { display: flex; flex-direction: column; gap: 5px; width: 275px; border: 1px solid #444; border-radius: 4px; padding: 8px; box-sizing: border-box; }
         .team-blue { border-color: rgba(0, 100, 255, 0.5); background: rgba(0, 50, 150, 0.05); }
         .team-red { border-color: rgba(255, 0, 50, 0.5); background: rgba(150, 0, 30, 0.05); }
-        .team-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; margin-bottom: 8px; font-weight: bold; }
+        .team-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; margin-bottom: 5px; font-weight: bold; }
         
-        /* Expanded Player Card styling */
-        .player-card { display: flex; flex-direction: column; gap: 6px; background: #2a2a2a; padding: 8px; border: 1px solid #444; margin-bottom: 5px; border-radius: 4px; }
+        .player-card { display: flex; flex-direction: column; gap: 4px; background: #2a2a2a; padding: 8px; border: 1px solid #444; border-radius: 4px; }
         .player-header { display: flex; align-items: center; gap: 8px; }
         .player-header img { width: 28px; height: 28px; border-radius: 50%; }
         .player-info { display: flex; flex-direction: column; font-size: 12px; }
         .player-name { font-weight: bold; width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .player-kda { color: #aaa; }
+        .player-decimal-kda { font-weight: bold; font-size: 11px; margin-left: 3px; }
         
         .player-casts { font-size: 10px; color: #bbb; border-top: 1px solid #3d3d3d; padding-top: 4px; display: flex; justify-content: space-between; }
         .player-toggles { display: flex; gap: 10px; font-size: 11px; margin-top: 2px; }
@@ -36,7 +40,6 @@
             background-color: #0d1a24; 
             border: 2px solid #555; 
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-            /* OP.GG styled map assignment */
             background-image: url('opgg_map.png');
             background-size: cover;
         }
@@ -49,8 +52,6 @@
     <input type="text" id="gameName" placeholder="Game Name">
     <input type="text" id="tagLine" placeholder="Tagline">
     <button onclick="fetchData()">Generate Data</button>
-    <button onclick="toggleGlobal('kills')">Toggle All Kills (Green)</button>
-    <button onclick="toggleGlobal('deaths')">Toggle All Deaths (Red)</button>
 </div>
 
 <div id="status">Awaiting input...</div>
@@ -58,8 +59,8 @@
 <div class="main-content">
     <div class="sidebar" id="matchList"></div>
     <canvas id="mapCanvas" width="500" height="500"></canvas>
-    <div class="sidebar" id="playerList">
-        <div style="color: #777; text-align: center; font-size: 13px;">Select 'View Players' on a match</div>
+    <div class="player-list-container" id="playerList">
+        <div style="color: #777; text-align: center; font-size: 13px; width: 100%; margin-top: 50px;">Select a match to load players and heatmap</div>
     </div>
 </div>
 
@@ -68,13 +69,13 @@
     const ctx = canvas.getContext('2d');
     const RIOT_MAP_MAX = 15000; 
 
+    let matchIdsList = [];
     let matchData = {}; 
-    let showKills = true;
-    let showDeaths = true;
-    
     let currentPuuid = '';
     let activeDetailedMatchId = null;
-    let playerHeatmapToggles = {}; // Track active heatmaps per participantId in detailed mode
+    let playerHeatmapToggles = {}; 
+    
+    let queueActive = false;
 
     async function fetchData() {
         const gameName = document.getElementById('gameName').value;
@@ -88,10 +89,15 @@
             return;
         }
 
+        // Cancel previous queue logic
+        queueActive = false;
+
+        // Reset state
         matchData = {};
+        matchIdsList = [];
         activeDetailedMatchId = null;
         matchListDiv.innerHTML = '';
-        playerListDiv.innerHTML = '<div style="color: #777; text-align: center; font-size: 13px;">Select \'View Players\' on a match</div>';
+        playerListDiv.innerHTML = '<div style="color: #777; text-align: center; font-size: 13px; width: 100%; margin-top: 50px;">Select a match to load players and heatmap</div>';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         try {
@@ -103,79 +109,112 @@
 
             status.innerText = "Fetching Match List...";
             const matchRes = await fetch(`/api/matches/${currentPuuid}`);
-            const matchIds = await matchRes.json();
+            matchIdsList = await matchRes.json();
 
-            status.innerText = `Fetching Metadata and Timelines...`;
+            status.innerText = "Match list compiled. Executing background queue...";
             
-            for (let i = 0; i < matchIds.length; i++) {
-                const matchId = matchIds[i];
-                matchData[matchId] = { kills: [], deaths: [], active: true, participants: [], playerEvents: {} };
-
-                // Fetch match stats (KDA and Spells)
-                const detailsRes = await fetch(`/api/match/${matchId}`);
-                const details = await detailsRes.json();
-                matchData[matchId].participants = details.info.participants;
-
-                // Fetch match timeline coordinates
-                const timelineRes = await fetch(`/api/timeline/${matchId}`);
-                const timeline = await timelineRes.json();
-
-                const participantInfo = timeline.info.participants.find(p => p.puuid === currentPuuid);
-                if (!participantInfo) continue;
-                const participantId = participantInfo.participantId;
-
-                // Initialize tracking maps for all 10 players
-                for (let pId = 1; pId <= 10; pId++) {
-                    matchData[matchId].playerEvents[pId] = { kills: [], deaths: [] };
-                }
-
-                timeline.info.frames.forEach(frame => {
-                    frame.events.forEach(event => {
-                        if (event.type === 'CHAMPION_KILL' && event.position) {
-                            const kId = event.killerId;
-                            const vId = event.victimId;
-                            if (kId && matchData[matchId].playerEvents[kId]) {
-                                matchData[matchId].playerEvents[kId].kills.push(event.position);
-                            }
-                            if (vId && matchData[matchId].playerEvents[vId]) {
-                                matchData[matchId].playerEvents[vId].deaths.push(event.position);
-                            }
-
-                            // Populate general array for main searched player
-                            if (event.killerId === participantId) matchData[matchId].kills.push(event.position);
-                            if (event.victimId === participantId) matchData[matchId].deaths.push(event.position);
-                        }
-                    });
-                });
-
+            // Generate skeleton HTML elements instantly
+            for (let i = 0; i < matchIdsList.length; i++) {
+                const matchId = matchIdsList[i];
                 const div = document.createElement('div');
                 div.className = 'match-item';
+                div.id = `item-${matchId}`;
                 div.innerHTML = `
-                    <div style="display: flex; justify-content: space-between;">
+                    <div class="match-meta">
                         <span>Match ${i + 1}</span>
-                        <button onclick="loadPlayers('${matchId}')" style="padding: 2px 5px; font-size: 11px;">View Players</button>
+                        <span id="badge-${matchId}" style="color: #aaa; font-size: 11px; font-weight: bold;">Loading...</span>
                     </div>
-                    <label>
-                        <input type="checkbox" checked onchange="toggleMatch('${matchId}', this.checked)">
-                        Map Visible
-                    </label>
+                    <button id="btn-${matchId}" disabled onclick="displayMatchData('${matchId}')" style="padding: 4px 8px; font-size: 11px; width: 100%;">View Match</button>
                 `;
                 matchListDiv.appendChild(div);
             }
 
-            status.innerText = "Data compiled successfully.";
-            renderCanvas();
+            // Start background queue processing
+            queueActive = true;
+            processQueue(0);
 
         } catch (error) {
             status.innerText = "Execution failed: " + error.message;
         }
     }
 
-    function loadPlayers(matchId) {
+    // Sequential Queue Processing with 500ms Throttle Delay
+    async function processQueue(index) {
+        if (!queueActive || index >= matchIdsList.length) {
+            if (queueActive) {
+                document.getElementById('status').innerText = "All matches cached. Zero-latency navigation active.";
+            }
+            return;
+        }
+
+        const matchId = matchIdsList[index];
+        const status = document.getElementById('status');
+        
+        try {
+            status.innerText = `Caching match ${index + 1}/${matchIdsList.length} in background...`;
+            
+            matchData[matchId] = { kills: [], deaths: [], participants: [], playerEvents: {} };
+
+            const detailsRes = await fetch(`/api/match/${matchId}`);
+            const details = await detailsRes.json();
+            matchData[matchId].participants = details.info.participants;
+
+            const timelineRes = await fetch(`/api/timeline/${matchId}`);
+            const timeline = await timelineRes.json();
+
+            const participantInfo = timeline.info.participants.find(p => p.puuid === currentPuuid);
+            if (!participantInfo) {
+                throw new Error("Target player missing in match timeline.");
+            }
+            const participantId = participantInfo.participantId;
+
+            for (let pId = 1; pId <= 10; pId++) {
+                matchData[matchId].playerEvents[pId] = { kills: [], deaths: [] };
+            }
+
+            timeline.info.frames.forEach(frame => {
+                frame.events.forEach(event => {
+                    if (event.type === 'CHAMPION_KILL' && event.position) {
+                        const kId = event.killerId;
+                        const vId = event.victimId;
+                        if (kId && matchData[matchId].playerEvents[kId]) {
+                            matchData[matchId].playerEvents[kId].kills.push(event.position);
+                        }
+                        if (vId && matchData[matchId].playerEvents[vId]) {
+                            matchData[matchId].playerEvents[vId].deaths.push(event.position);
+                        }
+                    }
+                });
+            });
+
+            // Find match result to generate side-bar badges
+            const targetPlayerStats = details.info.participants.find(p => p.puuid === currentPuuid);
+            const isWin = targetPlayerStats ? targetPlayerStats.win : false;
+            
+            // Update match element UI state
+            const badge = document.getElementById(`badge-${matchId}`);
+            if (badge) {
+                badge.innerHTML = isWin 
+                    ? '<span style="color: #57ca85;">WIN</span>' 
+                    : '<span style="color: #e25c5c;">LOSS</span>';
+            }
+            const btn = document.getElementById(`btn-${matchId}`);
+            if (btn) btn.disabled = false;
+
+        } catch (e) {
+            const badge = document.getElementById(`badge-${matchId}`);
+            if (badge) badge.innerHTML = '<span style="color: #999;">ERROR</span>';
+            console.error(`Queue failure on match index ${index}:`, e);
+        }
+
+        // Loop to next item in queue after 500ms delay
+        setTimeout(() => processQueue(index + 1), 500);
+    }
+
+    function displayMatchData(matchId) {
         activeDetailedMatchId = matchId;
         playerHeatmapToggles = {};
         
-        // Find searched player to set them checked by default
         const searchedPlayer = matchData[matchId].participants.find(p => p.puuid === currentPuuid);
         const searchedId = searchedPlayer ? searchedPlayer.participantId : null;
         
@@ -192,10 +231,9 @@
 
     function renderSidebarPlayers(matchId) {
         const playerListDiv = document.getElementById('playerList');
-        playerListDiv.innerHTML = `<div style="margin-bottom: 10px; font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 5px; text-align: center;">Match Players</div>`;
+        playerListDiv.innerHTML = '';
         
         const participants = matchData[matchId].participants;
-        
         const blueTeam = participants.filter(p => p.teamId === 100);
         const redTeam = participants.filter(p => p.teamId === 200);
         
@@ -211,6 +249,20 @@
             const riotId = p.riotIdGameName ? `${p.riotIdGameName}#${p.riotIdTagline}` : p.summonerName;
             const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${p.championId}.png`;
             
+            const divisor = Math.max(1, p.deaths);
+            const rawKda = (p.kills + p.assists) / divisor;
+            const decimalKda = rawKda.toFixed(2);
+            
+            let kdaColor = '#aaa';
+            if (p.deaths > 0) {
+                if (rawKda >= 4.0) kdaColor = '#e5c158'; 
+                else if (rawKda >= 3.0) kdaColor = '#57ca85'; 
+                else if (rawKda >= 2.0) kdaColor = '#e29b3f'; 
+                else kdaColor = '#e25c5c'; 
+            } else if (p.kills + p.assists > 0) {
+                kdaColor = '#e5c158'; 
+            }
+
             const card = document.createElement('div');
             card.className = 'player-card';
             
@@ -223,7 +275,10 @@
                     <img src="${iconUrl}" alt="Champ">
                     <div class="player-info">
                         <span class="player-name" title="${riotId}">${riotId}</span>
-                        <span class="player-kda">KDA: ${p.kills}/${p.deaths}/${p.assists}</span>
+                        <span class="player-kda">
+                            KDA: ${p.kills}/${p.deaths}/${p.assists}
+                            <span class="player-decimal-kda" style="color: ${kdaColor}">(${decimalKda})</span>
+                        </span>
                     </div>
                 </div>
                 <div class="player-casts" title="Spells Cast">
@@ -254,28 +309,10 @@
         }
     }
 
-    function toggleGlobal(type) {
-        // Drop detail mode to return to general view if globally toggled
-        activeDetailedMatchId = null; 
-        document.getElementById('playerList').innerHTML = '<div style="color: #777; text-align: center; font-size: 13px;">Select \'View Players\' on a match</div>';
-        
-        if (type === 'kills') showKills = !showKills;
-        if (type === 'deaths') showDeaths = !showDeaths;
-        renderCanvas();
-    }
-
-    function toggleMatch(matchId, isVisible) {
-        if (matchData[matchId]) {
-            matchData[matchId].active = isVisible;
-            renderCanvas();
-        }
-    }
-
     function renderCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (activeDetailedMatchId) {
-            // Detailed mode: Draw checked coordinates colored by team assignment
             const match = matchData[activeDetailedMatchId];
             if (!match) return;
             
@@ -295,18 +332,6 @@
                 }
                 if (toggles.deaths) {
                     events.deaths.forEach(pos => drawPoint(pos.x, pos.y, deathColor));
-                }
-            });
-        } else {
-            // General mode: Render checked matches for the primary searched user
-            Object.values(matchData).forEach(match => {
-                if (!match.active) return;
-                
-                if (showDeaths) {
-                    match.deaths.forEach(pos => drawPoint(pos.x, pos.y, 'rgba(255, 0, 0, 0.8)'));
-                }
-                if (showKills) {
-                    match.kills.forEach(pos => drawPoint(pos.x, pos.y, 'rgba(0, 255, 0, 0.8)'));
                 }
             });
         }

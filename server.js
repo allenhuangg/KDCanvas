@@ -23,7 +23,7 @@ app.get('/api/account/:gameName/:tagLine', async (req, res) => {
 });
 
 app.get('/api/matches/:puuid', async (req, res) => {
-    const url = `https://${REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${req.params.puuid}/ids?count=5`;
+    const url = `https://${REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${req.params.puuid}/ids?count=20`;
     const response = await fetch(url, { headers });
     res.status(response.status).json(await response.json());
 });
