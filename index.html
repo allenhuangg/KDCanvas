@@ -13,16 +13,19 @@
         
         .main-content { display: flex; gap: 20px; width: 100%; max-width: 1400px; justify-content: center; align-items: flex-start; }
         .left-panel { display: flex; flex-direction: column; gap: 15px; width: 230px; }
-        .sidebar { display: flex; flex-direction: column; gap: 10px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 400px; box-sizing: border-box; }
-        .stats-panel { background: #222; border: 2px solid #444; padding: 15px; box-sizing: border-box; }
-        .stats-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #e5c158; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 8px; }
+        .sidebar { display: flex; flex-direction: column; gap: 10px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 480px; box-sizing: border-box; }
+        
+        .stats-panel { background: #222; border: 2px solid #444; padding: 15px; box-sizing: border-box; display: flex; flex-direction: column; gap: 15px; }
+        .stats-block { display: flex; flex-direction: column; gap: 5px; }
+        .stats-title { font-size: 11px; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #444; padding-bottom: 4px; margin-bottom: 4px; }
+        .title-best { color: #57ca85; }
+        .title-worst { color: #e25c5c; }
         
         .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; flex-direction: column; gap: 6px; }
         .match-meta { display: flex; justify-content: space-between; font-size: 13px; align-items: center; border-bottom: 1px solid #444; padding-bottom: 4px; }
         .match-card-info { display: flex; align-items: center; gap: 8px; font-size: 11px; margin-top: 2px; }
         .match-card-info img { width: 22px; height: 22px; border-radius: 50%; border: 1px solid #555; }
         
-        /* Side-by-Side Player Panel Layout */
         .player-list-container { display: flex; gap: 10px; width: 560px; min-height: 500px; }
         .team-container { display: flex; flex-direction: column; gap: 5px; width: 275px; border: 1px solid #444; border-radius: 4px; padding: 8px; box-sizing: border-box; }
         .team-blue { border-color: rgba(0, 100, 255, 0.5); background: rgba(0, 50, 150, 0.05); }
@@ -41,7 +44,7 @@
         .player-toggles { display: flex; gap: 10px; font-size: 11px; margin-top: 2px; }
         .player-toggles label { cursor: pointer; display: flex; align-items: center; gap: 3px; }
 
-        .stat-row { display: flex; align-items: center; gap: 10px; background: #333; padding: 6px; border: 1px solid #555; margin-bottom: 5px; font-size: 12px; }
+        .stat-row { display: flex; align-items: center; gap: 10px; background: #333; padding: 6px; border: 1px solid #555; font-size: 12px; }
         .stat-row img { width: 24px; height: 24px; border-radius: 50%; border: 1px solid #555; }
 
         #mapCanvas { 
@@ -68,8 +71,14 @@
     <div class="left-panel">
         <div class="sidebar" id="matchList"></div>
         <div class="stats-panel">
-            <div class="stats-title">Highest Win Rate Against</div>
-            <div id="winrateStats" style="color: #777; font-size: 12px; text-align: center;">Awaiting match history data...</div>
+            <div class="stats-block">
+                <div class="stats-title title-best">Highest Win Rate</div>
+                <div id="winrateBest" style="color: #777; font-size: 12px;">Awaiting data...</div>
+            </div>
+            <div class="stats-block">
+                <div class="stats-title title-worst">Lowest Win Rate</div>
+                <div id="winrateWorst" style="color: #777; font-size: 12px;">Awaiting data...</div>
+            </div>
         </div>
     </div>
     
@@ -84,79 +93,63 @@
     const canvas = document.getElementById('mapCanvas');
     const ctx = canvas.getContext('2d');
     const RIOT_MAP_MAX = 15000; 
+    const MAX_MATCH_LIMIT = 50;
 
     let matchIdsList = [];
     let matchData = {}; 
+    let validMatchCount = 0;
+    
     let currentPuuid = '';
     let activeDetailedMatchId = null;
     let playerHeatmapToggles = {}; 
+    
     let queueActive = false;
+    let imageCache = {};
+    let currentRenderId = 0;
 
     async function fetchData() {
         const gameName = document.getElementById('gameName').value;
         const tagLine = document.getElementById('tagLine').value;
         const status = document.getElementById('status');
-        const matchListDiv = document.getElementById('matchList');
-        const playerListDiv = document.getElementById('playerList');
-        const winrateStats = document.getElementById('winrateStats');
 
-        if (!gameName || !tagLine) {
-            status.innerText = "Error: Input required.";
-            return;
-        }
+        if (!gameName || !tagLine) return;
 
         queueActive = false;
         matchData = {};
         matchIdsList = [];
+        validMatchCount = 0;
         activeDetailedMatchId = null;
-        matchListDiv.innerHTML = '';
-        playerListDiv.innerHTML = '<div style="color: #777; text-align: center; font-size: 13px; width: 100%; margin-top: 50px;">Select a match to load players and heatmap</div>';
-        winrateStats.innerHTML = '<div style="color: #777; font-size: 12px; text-align: center;">Calculating stats...</div>';
+        
+        document.getElementById('matchList').innerHTML = '';
+        document.getElementById('playerList').innerHTML = '<div style="color: #777; text-align: center; font-size: 13px; width: 100%; margin-top: 50px;">Select a match to load players and heatmap</div>';
+        document.getElementById('winrateBest').innerHTML = '<div style="color: #777; font-size: 12px;">Calculating...</div>';
+        document.getElementById('winrateWorst').innerHTML = '<div style="color: #777; font-size: 12px;">Calculating...</div>';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         try {
             status.innerText = "Fetching PUUID...";
             const accountRes = await fetch(`/api/account/${gameName}/${tagLine}`);
             const accountData = await accountRes.json();
-            if (!accountData.puuid) throw new Error(`API Error: ${JSON.stringify(accountData)}`);
+            if (!accountData.puuid) throw new Error(`Account Error`);
             currentPuuid = accountData.puuid;
 
-            status.innerText = "Fetching Match List...";
+            status.innerText = "Fetching Match Pool...";
             const matchRes = await fetch(`/api/matches/${currentPuuid}`);
             matchIdsList = await matchRes.json();
 
-            status.innerText = "Match list compiled. Executing background queue...";
-            
-            for (let i = 0; i < matchIdsList.length; i++) {
-                const matchId = matchIdsList[i];
-                const div = document.createElement('div');
-                div.className = 'match-item';
-                div.id = `item-${matchId}`;
-                div.innerHTML = `
-                    <div class="match-meta">
-                        <span>Match ${i + 1}</span>
-                        <span id="badge-${matchId}" style="color: #aaa; font-size: 11px; font-weight: bold;">Loading...</span>
-                    </div>
-                    <div class="match-card-info" id="info-${matchId}">
-                        <span style="color: #777;">Pending data...</span>
-                    </div>
-                    <button id="btn-${matchId}" disabled onclick="displayMatchData('${matchId}')" style="padding: 4px 8px; font-size: 11px; width: 100%;">View Match</button>
-                `;
-                matchListDiv.appendChild(div);
-            }
-
+            status.innerText = "Streaming Match Validation Queue... (Expect delay if rate-limit reached)";
             queueActive = true;
             processQueue(0);
 
         } catch (error) {
-            status.innerText = "Execution failed: " + error.message;
+            status.innerText = "Execution failed.";
         }
     }
 
     async function processQueue(index) {
-        if (!queueActive || index >= matchIdsList.length) {
+        if (!queueActive || validMatchCount >= MAX_MATCH_LIMIT || index >= matchIdsList.length) {
             if (queueActive) {
-                document.getElementById('status').innerText = "All matches cached. Zero-latency navigation active.";
+                document.getElementById('status').innerText = `Target reached: ${validMatchCount} matches compiled. Data processing terminated.`;
                 calculateWinRates();
             }
             return;
@@ -166,22 +159,25 @@
         const status = document.getElementById('status');
         
         try {
-            status.innerText = `Caching match ${index + 1}/${matchIdsList.length} in background...`;
+            status.innerText = `Validating match [Pool Index ${index}] / Caching valid match ${validMatchCount + 1}/${MAX_MATCH_LIMIT}...`;
             
-            matchData[matchId] = { kills: [], deaths: [], participants: [], playerEvents: {} };
-
             const detailsRes = await fetch(`/api/match/${matchId}`);
             const details = await detailsRes.json();
-            matchData[matchId].participants = details.info.participants;
+            
+            // Discard Arenas (1700) and TFT (1090)
+            const qId = details.info.queueId;
+            if (qId === 1700 || qId === 1090 || qId === undefined) {
+                setTimeout(() => processQueue(index + 1), 200);
+                return;
+            }
+
+            matchData[matchId] = { kills: [], deaths: [], participants: details.info.participants, playerEvents: {} };
 
             const timelineRes = await fetch(`/api/timeline/${matchId}`);
             const timeline = await timelineRes.json();
 
             const participantInfo = timeline.info.participants.find(p => p.puuid === currentPuuid);
-            if (!participantInfo) {
-                throw new Error("Target player missing in match timeline.");
-            }
-            const participantId = participantInfo.participantId;
+            if (!participantInfo) throw new Error("Participant skip.");
 
             for (let pId = 1; pId <= 10; pId++) {
                 matchData[matchId].playerEvents[pId] = { kills: [], deaths: [] };
@@ -190,139 +186,123 @@
             timeline.info.frames.forEach(frame => {
                 frame.events.forEach(event => {
                     if (event.type === 'CHAMPION_KILL' && event.position) {
-                        const kId = event.killerId;
-                        const vId = event.victimId;
-                        if (kId && matchData[matchId].playerEvents[kId]) {
-                            // Store complete event object instead of coordinates
-                            matchData[matchId].playerEvents[kId].kills.push(event); 
+                        if (event.killerId && matchData[matchId].playerEvents[event.killerId]) {
+                            matchData[matchId].playerEvents[event.killerId].kills.push(event); 
                         }
-                        if (vId && matchData[matchId].playerEvents[vId]) {
-                            matchData[matchId].playerEvents[vId].deaths.push(event); 
+                        if (event.victimId && matchData[matchId].playerEvents[event.victimId]) {
+                            matchData[matchId].playerEvents[event.victimId].deaths.push(event); 
                         }
                     }
                 });
             });
 
-            const targetPlayerStats = details.info.participants.find(p => p.puuid === currentPuuid);
-            const isWin = targetPlayerStats ? targetPlayerStats.win : false;
-            
-            const badge = document.getElementById(`badge-${matchId}`);
-            if (badge) {
-                badge.innerHTML = isWin 
-                    ? '<span style="color: #57ca85;">WIN</span>' 
-                    : '<span style="color: #e25c5c;">LOSS</span>';
-            }
-
-            const infoDiv = document.getElementById(`info-${matchId}`);
-            if (infoDiv && targetPlayerStats) {
-                const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${targetPlayerStats.championId}.png`;
-                const divisor = Math.max(1, targetPlayerStats.deaths);
-                const rawKda = (targetPlayerStats.kills + targetPlayerStats.assists) / divisor;
-                const decimalKda = rawKda.toFixed(2);
-
-                let kdaColor = '#aaa';
-                if (targetPlayerStats.deaths > 0) {
-                    if (rawKda >= 4.0) kdaColor = '#e5c158'; 
-                    else if (rawKda >= 3.0) kdaColor = '#57ca85'; 
-                    else if (rawKda >= 2.0) kdaColor = '#e29b3f'; 
-                    else kdaColor = '#e25c5c'; 
-                } else if (targetPlayerStats.kills + targetPlayerStats.assists > 0) {
-                    kdaColor = '#e5c158'; 
-                }
-
-                infoDiv.innerHTML = `
-                    <img src="${iconUrl}" alt="Champ">
-                    <span>
-                        ${targetPlayerStats.kills}/${targetPlayerStats.deaths}/${targetPlayerStats.assists}
-                        <span style="color: ${kdaColor}; font-weight: bold; margin-left: 3px;">(${decimalKda})</span>
-                    </span>
-                `;
-            }
-
-            const btn = document.getElementById(`btn-${matchId}`);
-            if (btn) btn.disabled = false;
-
-            // Compute statistics incrementally as data caches
+            validMatchCount++;
+            appendMatchUI(matchId, details);
             calculateWinRates();
 
         } catch (e) {
-            const badge = document.getElementById(`badge-${matchId}`);
-            if (badge) badge.innerHTML = '<span style="color: #999;">ERROR</span>';
-            const infoDiv = document.getElementById(`info-${matchId}`);
-            if (infoDiv) infoDiv.innerHTML = '<span style="color: #777;">Fetch failed</span>';
-            console.error(`Queue failure on match index ${index}:`, e);
+            console.error(`Discarding match index ${index}`);
         }
 
         setTimeout(() => processQueue(index + 1), 500);
     }
 
-    // Aggregated Opposing Match-Up Winrate Parser
+    function appendMatchUI(matchId, details) {
+        const targetPlayerStats = details.info.participants.find(p => p.puuid === currentPuuid);
+        if (!targetPlayerStats) return;
+
+        const isWin = targetPlayerStats.win;
+        const badgeHTML = isWin ? '<span style="color: #57ca85;">WIN</span>' : '<span style="color: #e25c5c;">LOSS</span>';
+        
+        const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${targetPlayerStats.championId}.png`;
+        const divisor = Math.max(1, targetPlayerStats.deaths);
+        const rawKda = (targetPlayerStats.kills + targetPlayerStats.assists) / divisor;
+        const decimalKda = rawKda.toFixed(2);
+
+        let kdaColor = '#aaa';
+        if (targetPlayerStats.deaths > 0) {
+            if (rawKda >= 4.0) kdaColor = '#e5c158'; 
+            else if (rawKda >= 3.0) kdaColor = '#57ca85'; 
+            else if (rawKda >= 2.0) kdaColor = '#e29b3f'; 
+            else kdaColor = '#e25c5c'; 
+        } else if (targetPlayerStats.kills + targetPlayerStats.assists > 0) {
+            kdaColor = '#e5c158'; 
+        }
+
+        const div = document.createElement('div');
+        div.className = 'match-item';
+        div.innerHTML = `
+            <div class="match-meta">
+                <span>Match ${validMatchCount}</span>
+                ${badgeHTML}
+            </div>
+            <div class="match-card-info">
+                <img src="${iconUrl}" alt="Champ">
+                <span>
+                    ${targetPlayerStats.kills}/${targetPlayerStats.deaths}/${targetPlayerStats.assists}
+                    <span style="color: ${kdaColor}; font-weight: bold; margin-left: 3px;">(${decimalKda})</span>
+                </span>
+            </div>
+            <button onclick="displayMatchData('${matchId}')" style="padding: 4px 8px; font-size: 11px; width: 100%;">View Match</button>
+        `;
+        document.getElementById('matchList').appendChild(div);
+    }
+
     function calculateWinRates() {
         const opponentStats = {};
 
         Object.values(matchData).forEach(match => {
-            if (!match.participants || match.participants.length === 0) return;
-
             const me = match.participants.find(p => p.puuid === currentPuuid);
             if (!me) return;
 
-            const myTeam = me.teamId;
-            const won = me.win;
-
-            // Target the opposing team participants
-            const opponents = match.participants.filter(p => p.teamId !== myTeam);
-
+            const opponents = match.participants.filter(p => p.teamId !== me.teamId);
             opponents.forEach(opp => {
-                const champId = opp.championId;
-                if (!opponentStats[champId]) {
-                    opponentStats[champId] = { wins: 0, games: 0 };
-                }
-                opponentStats[champId].games += 1;
-                if (won) opponentStats[champId].wins += 1;
+                const cId = opp.championId;
+                if (!opponentStats[cId]) opponentStats[cId] = { wins: 0, games: 0 };
+                opponentStats[cId].games += 1;
+                if (me.win) opponentStats[cId].wins += 1;
             });
         });
 
-        // Map and sort results
-        let list = Object.keys(opponentStats).map(champId => {
-            const stats = opponentStats[champId];
+        let list = Object.keys(opponentStats).map(cId => {
             return {
-                championId: champId,
-                wins: stats.wins,
-                games: stats.games,
-                winrate: (stats.wins / stats.games) * 100
+                championId: cId,
+                wins: opponentStats[cId].wins,
+                games: opponentStats[cId].games,
+                winrate: (opponentStats[cId].wins / opponentStats[cId].games) * 100
             };
         });
 
-        // Filter out single matchups to prioritize recurring counter matchups
-        let filtered = list.filter(item => item.games >= 2);
-        if (filtered.length === 0) filtered = list; // Fallback if no champions are fought repeatedly
+        let validMatchups = list.filter(item => item.games >= 2);
+        if (validMatchups.length < 6) validMatchups = list;
 
-        filtered.sort((a, b) => b.winrate - a.winrate || b.games - a.games);
+        const bestList = [...validMatchups].sort((a, b) => b.winrate - a.winrate || b.games - a.games).slice(0, 3);
+        const worstList = [...validMatchups].sort((a, b) => a.winrate - b.winrate || b.games - a.games).slice(0, 3);
 
-        const winrateStatsDiv = document.getElementById('winrateStats');
-        if (filtered.length === 0) {
-            winrateStatsDiv.innerHTML = '<div style="color: #777; text-align: center;">No opponent data compiled.</div>';
+        renderStatsBlock('winrateBest', bestList, '#57ca85');
+        renderStatsBlock('winrateWorst', worstList, '#e25c5c');
+    }
+
+    function renderStatsBlock(elementId, list, colorHex) {
+        const container = document.getElementById(elementId);
+        if (list.length === 0) {
+            container.innerHTML = '<div style="color: #777; font-size: 11px;">Insufficient data.</div>';
             return;
         }
-
-        winrateStatsDiv.innerHTML = '';
-        const displayLimit = Math.min(3, filtered.length);
-        
-        for (let i = 0; i < displayLimit; i++) {
-            const item = filtered[i];
+        container.innerHTML = '';
+        list.forEach(item => {
             const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${item.championId}.png`;
-            
             const row = document.createElement('div');
             row.className = 'stat-row';
             row.innerHTML = `
-                <img src="${iconUrl}" alt="Champ">
+                <img src="${iconUrl}">
                 <div style="display: flex; flex-direction: column;">
-                    <span style="font-weight: bold; color: #57ca85;">${item.winrate.toFixed(0)}% Win Rate</span>
+                    <span style="font-weight: bold; color: ${colorHex};">${item.winrate.toFixed(0)}% Win Rate</span>
                     <span style="color: #aaa; font-size: 10px;">Record: ${item.wins}W - ${item.games - item.wins}L</span>
                 </div>
             `;
-            winrateStatsDiv.appendChild(row);
-        }
+            container.appendChild(row);
+        });
     }
 
     function displayMatchData(matchId) {
@@ -333,10 +313,7 @@
         const searchedId = searchedPlayer ? searchedPlayer.participantId : null;
         
         for (let pId = 1; pId <= 10; pId++) {
-            playerHeatmapToggles[pId] = {
-                kills: pId === searchedId,
-                deaths: pId === searchedId
-            };
+            playerHeatmapToggles[pId] = { kills: pId === searchedId, deaths: pId === searchedId };
         }
         
         renderSidebarPlayers(matchId);
@@ -373,9 +350,7 @@
                 else if (rawKda >= 3.0) kdaColor = '#57ca85'; 
                 else if (rawKda >= 2.0) kdaColor = '#e29b3f'; 
                 else kdaColor = '#e25c5c'; 
-            } else if (p.kills + p.assists > 0) {
-                kdaColor = '#e5c158'; 
-            }
+            } else if (p.kills + p.assists > 0) kdaColor = '#e5c158'; 
 
             const card = document.createElement('div');
             card.className = 'player-card';
@@ -386,7 +361,7 @@
             
             card.innerHTML = `
                 <div class="player-header">
-                    <img src="${iconUrl}" alt="Champ">
+                    <img src="${iconUrl}">
                     <div class="player-info">
                         <span class="player-name" title="${riotId}">${riotId}</span>
                         <span class="player-kda">
@@ -395,7 +370,7 @@
                         </span>
                     </div>
                 </div>
-                <div class="player-casts" title="Spells Cast">
+                <div class="player-casts">
                     <span>Q: ${p.spell1Casts || 0}</span>
                     <span>W: ${p.spell2Casts || 0}</span>
                     <span>E: ${p.spell3Casts || 0}</span>
@@ -423,69 +398,72 @@
         }
     }
 
-    function renderCanvas() {
+    function getChampionImage(champId) {
+        return new Promise((resolve) => {
+            if (imageCache[champId]) return resolve(imageCache[champId]);
+            const img = new Image();
+            img.src = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${champId}.png`;
+            img.onload = () => { imageCache[champId] = img; resolve(img); };
+            img.onerror = () => resolve(null);
+        });
+    }
+
+    async function renderCanvas() {
+        currentRenderId++;
+        const renderId = currentRenderId;
+        
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (activeDetailedMatchId) {
-            const match = matchData[activeDetailedMatchId];
-            if (!match) return;
+        if (!activeDetailedMatchId) return;
+        const match = matchData[activeDetailedMatchId];
+        if (!match) return;
+        
+        for (const pId of Object.keys(playerHeatmapToggles)) {
+            const toggles = playerHeatmapToggles[pId];
+            const events = match.playerEvents[pId];
+            const participant = match.participants.find(p => p.participantId == pId);
             
-            Object.keys(playerHeatmapToggles).forEach(pId => {
-                const toggles = playerHeatmapToggles[pId];
-                const events = match.playerEvents[pId];
-                const participant = match.participants.find(p => p.participantId == pId);
-                
-                if (!events || !participant) return;
-                
-                // Color codes for borders
-                const killBorder = 'rgba(0, 255, 0, 0.9)'; 
-                const deathBorder = 'rgba(255, 0, 0, 0.9)';
-                
-                if (toggles.kills) {
-                    events.kills.forEach(event => {
-                        // Plot victim's champion icon for a kill event
-                        const victim = match.participants.find(p => p.participantId === event.victimId);
-                        const victimChampId = victim ? victim.championId : participant.championId;
-                        drawChampionIcon(event.position.x, event.position.y, victimChampId, killBorder);
-                    });
-                }
-                if (toggles.deaths) {
-                    events.deaths.forEach(event => {
-                        // Plot own champion icon for a death event
-                        drawPoint(event.position.x, event.position.y);
-                        drawChampionIcon(event.position.x, event.position.y, participant.championId, deathBorder);
-                    });
-                }
-            });
+            if (!events || !participant || (!toggles.kills && !toggles.deaths)) continue;
+            
+            const isBlueTeam = participant.teamId === 100;
+            const killBorder = isBlueTeam ? 'rgba(0, 150, 255, 0.9)' : 'rgba(255, 50, 50, 0.9)';
+            const deathBorder = isBlueTeam ? 'rgba(0, 50, 150, 0.9)' : 'rgba(150, 0, 0, 0.9)';
+            
+            // Plot exact champion corresponding to the toggled checkbox
+            const img = await getChampionImage(participant.championId);
+            
+            // Cancel execution if a new render instance superseded this async loop
+            if (renderId !== currentRenderId) return; 
+            
+            if (toggles.kills) {
+                events.kills.forEach(event => drawIcon(event.position.x, event.position.y, img, killBorder));
+            }
+            if (toggles.deaths) {
+                events.deaths.forEach(event => drawIcon(event.position.x, event.position.y, img, deathBorder));
+            }
         }
     }
 
-    // Standard HTML5 Canvas Circular Image Renderer with Clipping Paths
-    function drawChampionIcon(riotX, riotY, championId, borderColor) {
+    function drawIcon(riotX, riotY, img, borderColor) {
         const pixelX = (riotX / RIOT_MAP_MAX) * canvas.width;
         const pixelY = canvas.height - ((riotY / RIOT_MAP_MAX) * canvas.height);
-        const radius = 12; // Diameter: 24px
+        const radius = 12;
 
-        const img = new Image();
-        img.src = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${championId}.png`;
-        
-        img.onload = () => {
+        if (img) {
             ctx.save();
             ctx.beginPath();
             ctx.arc(pixelX, pixelY, radius, 0, Math.PI * 2, true);
             ctx.closePath();
-            ctx.clip(); // Mask boundaries to force circular layout
-            
+            ctx.clip();
             ctx.drawImage(img, pixelX - radius, pixelY - radius, radius * 2, radius * 2);
             ctx.restore();
+        }
 
-            // Render high-intensity, color-coded team boundaries
-            ctx.beginPath();
-            ctx.arc(pixelX, pixelY, radius, 0, Math.PI * 2, true);
-            ctx.strokeStyle = borderColor;
-            ctx.lineWidth = 2.5;
-            ctx.stroke();
-        };
+        ctx.beginPath();
+        ctx.arc(pixelX, pixelY, radius, 0, Math.PI * 2, true);
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
     }
 </script>
 

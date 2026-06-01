@@ -67,7 +67,8 @@ app.get('/api/account/:gameName/:tagLine', async (req, res) => {
 });
 
 app.get('/api/matches/:puuid', async (req, res) => {
-    const url = `https://${REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${req.params.puuid}/ids?count=20`;
+    // Increased from 20 to 100 to provide a buffer for discarding Arena matches
+    const url = `https://${REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/${req.params.puuid}/ids?count=100`;
     try {
         const response = await fetchWithRetry(url, { headers });
         res.status(response.status).json(await response.json());
