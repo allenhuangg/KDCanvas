@@ -13,7 +13,6 @@
             --accent-gold: #c8aa6e;
             --win-green: #00cca3;
             --loss-red: #e25c5c;
-            --btn-hover: #1e2328;
         }
 
         body { background-color: var(--bg-base); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; box-sizing: border-box; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -35,8 +34,7 @@
         .nav-search button { background: #222; border: none; color: var(--accent-gold); padding: 8px 15px; font-weight: bold; cursor: pointer; }
         .nav-search button:hover { background: var(--accent-gold); color: #000; }
 
-        /* Updated Radial Spotlight Hero Background */
-        .hero-section { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; overflow: hidden; background: radial-gradient(circle at 50% 40%, #1e222b 0%, var(--bg-base) 55%); }
+        .hero-section { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; overflow: hidden; background: radial-gradient(circle at 50% 40%, #1e222b 0%, var(--bg-base) 45%); }
         .hero-content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
         
         .hero-title { font-size: 48px; font-weight: 800; margin-bottom: 35px; text-align: center; line-height: 1.2; letter-spacing: -0.5px; }
@@ -105,7 +103,7 @@
 
 <div class="hero-section" id="heroSection">
     <div class="hero-content">
-        <div class="hero-title">Uncover your<br><span>League Performance</span></div>
+        <div class="hero-title">Uncover your<br><span>League performance</span></div>
         <div class="hero-search-wrapper">
             <input type="text" id="heroGameName" placeholder="Game Name">
             <input type="text" id="heroTagLine" placeholder="# Tagline">
@@ -167,33 +165,30 @@
 
     async function loadStaticAssets() {
         try {
-            // Corrected CDragon Path for Champions
-            const cRes = await fetch('https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-summary.json');
-            const cData = await cRes.json();
-            cData.forEach(c => { if (c.id) champMap[c.id] = c.name; });
+            const vRes = await fetch('https://ddragon.leagueoflegends.com/api/versions.json');
+            const versions = await vRes.json();
+            const patch = versions[0];
 
-            const iRes = await fetch('https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/items.json');
+            const cRes = await fetch(`https://ddragon.leagueoflegends.com/cdn/${patch}/data/en_US/champion.json`);
+            const cData = await cRes.json();
+            Object.values(cData.data).forEach(c => { champMap[c.key] = c.name; });
+
+            const iRes = await fetch(`https://ddragon.leagueoflegends.com/cdn/${patch}/data/en_US/item.json`);
             const iData = await iRes.json();
-            iData.forEach(i => {
-                if (i.id) itemMap[i.id] = { name: i.name, price: i.priceTotal, icon: parseCDragonPath(i.iconPath) };
+            Object.keys(iData.data).forEach(id => {
+                itemMap[id] = { name: iData.data[id].name, price: iData.data[id].gold.total, icon: `https://ddragon.leagueoflegends.com/cdn/${patch}/img/item/${id}.png` };
             });
 
-            const pRes = await fetch('https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perks.json');
+            const pRes = await fetch(`https://ddragon.leagueoflegends.com/cdn/${patch}/data/en_US/runesReforged.json`);
             const pData = await pRes.json();
-            pData.forEach(p => {
-                if (p.id) perkMap[p.id] = { name: p.name, icon: parseCDragonPath(p.iconPath) };
+            pData.forEach(tree => {
+                tree.slots.forEach(slot => {
+                    slot.runes.forEach(rune => {
+                        perkMap[rune.id] = { name: rune.name, icon: `https://ddragon.leagueoflegends.com/cdn/img/${rune.icon}` };
+                    });
+                });
             });
         } catch (e) { console.error("Asset load failure", e); }
-    }
-
-    // Robust Path Parser for CDragon
-    function parseCDragonPath(localPath) {
-        if (!localPath) return '';
-        let clean = localPath.toLowerCase();
-        if (clean.startsWith('/lol-game-data/assets/')) {
-            clean = clean.substring('/lol-game-data/assets/'.length);
-        }
-        return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/${clean}`;
     }
 
     function triggerSearch(fromNav) {
