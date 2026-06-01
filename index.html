@@ -2,74 +2,91 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>KDCanvas</title>
+    <title>KDCanvas Analytics</title>
     <style>
         :root {
             --bg-base: #0a0a0c;
             --bg-panel: #111115;
-            --border-color: #222228;
+            --border-color: #2a2a30;
             --text-main: #f0e6d2;
-            --text-muted: #a09b8c;
+            --text-muted: #888890;
             --accent-gold: #c8aa6e;
             --win-green: #00cca3;
             --loss-red: #e25c5c;
+            --btn-hover: #1e2328;
         }
 
-        body { background-color: var(--bg-base); color: var(--text-main); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; box-sizing: border-box; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        body { background-color: var(--bg-base); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; box-sizing: border-box; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        /* Custom Dark Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #33333b; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #44444f; }
 
-        .top-bar { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-shrink: 0; }
-        input, button { padding: 10px 14px; font-size: 14px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border-color); outline: none; }
-        button { cursor: pointer; background: #1e2328; border-color: var(--accent-gold); color: var(--accent-gold); font-weight: bold; transition: 0.2s; }
-        button:hover:not(:disabled) { background: var(--accent-gold); color: #000; }
-        button:disabled { cursor: not-allowed; opacity: 0.4; border-color: var(--border-color); color: var(--text-muted); }
+        /* Navigation & Logo */
+        .navbar { display: flex; align-items: center; justify-content: space-between; padding: 15px 30px; background: #0a0a0c; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+        .logo-container { display: flex; align-items: center; gap: 12px; }
+        .logo-container img { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--accent-gold); }
+        .logo-container span { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
 
-        #status { text-align: center; color: var(--text-muted); font-size: 13px; margin-bottom: 15px; height: 16px; flex-shrink: 0; }
+        /* Compact Top Search (Hidden initially) */
+        .nav-search { display: none; align-items: center; background: #18181c; border-radius: 20px; border: 1px solid #333; overflow: hidden; }
+        .nav-search input { background: transparent; border: none; color: var(--text-main); padding: 8px 15px; font-size: 13px; outline: none; width: 140px; }
+        .nav-search input:first-child { border-right: 1px solid #333; }
+        .nav-search button { background: #222; border: none; color: var(--accent-gold); padding: 8px 15px; font-weight: bold; cursor: pointer; }
+        .nav-search button:hover { background: var(--accent-gold); color: #000; }
 
-        /* Dashboard Grid System */
-        .dashboard { display: grid; grid-template-columns: 320px 520px 580px; gap: 20px; width: 100%; max-width: 1480px; margin: 0 auto; flex-grow: 1; min-height: 0; }
+        /* Hero Landing Section */
+        .hero-section { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; background: radial-gradient(circle at 50% 40%, #1a1a24 0%, var(--bg-base) 60%); transition: all 0.5s ease-in-out; }
+        .hero-title { font-size: 42px; font-weight: 800; margin-bottom: 30px; text-align: center; line-height: 1.1; }
+        .hero-title span { color: var(--accent-gold); }
+        .hero-search-wrapper { display: flex; background: #18181c; border: 1px solid #333; border-radius: 30px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 600px; }
+        .hero-search-wrapper input { flex: 1; background: transparent; border: none; color: var(--text-main); padding: 18px 25px; font-size: 16px; outline: none; }
+        .hero-search-wrapper input:first-child { flex: 1.5; border-right: 1px solid #333; }
+        .hero-search-wrapper button { background: #222; border: none; color: var(--accent-gold); padding: 0 35px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .hero-search-wrapper button:hover:not(:disabled) { background: var(--accent-gold); color: #000; }
+
+        #status { text-align: center; color: var(--text-muted); font-size: 13px; margin-top: 20px; height: 16px; }
+
+        /* Main Dashboard (Hidden initially) */
+        .dashboard { display: none; grid-template-columns: 280px 1fr 600px; gap: 20px; width: 100%; max-width: 1700px; margin: 0 auto; padding: 20px; flex-grow: 1; min-height: 0; box-sizing: border-box; }
         
-        .panel { background: var(--bg-panel); border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden; }
-        .panel-header { background: #18181c; padding: 10px 15px; font-size: 12px; font-weight: bold; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
-        .panel-content { padding: 15px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 10px; }
+        .panel { background: var(--bg-panel); border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden; border-radius: 8px; }
+        .panel-header { background: #16161a; padding: 12px 15px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+        .panel-content { padding: 10px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
 
-        /* Match History Left Column */
-        .match-item { background: #1a1a20; padding: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; border-radius: 4px; }
-        .match-meta { display: flex; justify-content: space-between; font-size: 12px; border-bottom: 1px solid #2a2a30; padding-bottom: 6px; }
+        /* Match History */
+        .match-item { background: #18181c; padding: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; border-radius: 6px; }
+        .match-meta { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px solid #25252b; padding-bottom: 6px; font-weight: bold; }
         .match-info { display: flex; align-items: center; gap: 12px; }
-        .match-info img { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #333; }
-        .match-kda { font-size: 14px; }
-        .btn-view { padding: 6px; font-size: 11px; width: 100%; background: #111; border: 1px solid #333; color: var(--text-muted); }
-        .btn-view:hover:not(:disabled) { background: #222; color: var(--text-main); }
+        .match-info img { width: 36px; height: 36px; border-radius: 50%; }
+        .match-kda { font-size: 13px; font-weight: 600; }
+        .btn-view { padding: 6px; font-size: 11px; width: 100%; background: #222; border: 1px solid #333; color: var(--text-muted); border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .btn-view:hover:not(:disabled) { background: #333; color: var(--text-main); }
 
         /* Map & Stats Middle Column */
-        .center-col { display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding-right: 5px; }
-        #mapCanvas { background-color: #0d1a24; border: 1px solid var(--border-color); background-image: url('opgg_map.png'); background-size: cover; width: 500px; height: 500px; flex-shrink: 0; }
+        .center-col { display: flex; flex-direction: column; gap: 15px; overflow-y: auto; padding-right: 5px; align-items: center; }
+        #mapCanvas { background-color: #0d1a24; border: 1px solid var(--border-color); border-radius: 8px; background-image: url('opgg_map.png'); background-size: cover; width: 500px; height: 500px; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .stat-card { background: #1a1a20; border: 1px solid var(--border-color); padding: 10px; display: flex; align-items: center; gap: 10px; border-radius: 4px; }
-        .stat-card img { width: 32px; height: 32px; border-radius: 4px; border: 1px solid #333; }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; max-width: 650px; }
+        .stat-card { background: #18181c; border: 1px solid var(--border-color); padding: 10px; display: flex; align-items: center; gap: 10px; border-radius: 6px; }
+        .stat-card img { width: 34px; height: 34px; border-radius: 4px; }
         .stat-card-circle img { border-radius: 50%; }
         .stat-info { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
-        .stat-title { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
-        .stat-name { font-size: 12px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .stat-val { font-size: 12px; }
+        .stat-title { font-size: 9px; color: var(--text-muted); text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }
+        .stat-name { font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat-val { font-size: 11px; font-weight: bold; }
 
         /* Right Column Player Details */
-        .teams-wrapper { display: flex; gap: 10px; }
-        .team-col { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-        .player-card { background: #1a1a20; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; display: flex; flex-direction: column; gap: 6px; }
+        .teams-wrapper { display: flex; gap: 10px; height: 100%; }
+        .team-col { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+        .player-card { background: #18181c; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
         .player-header { display: flex; align-items: center; gap: 10px; }
-        .player-header img { width: 32px; height: 32px; border-radius: 50%; }
-        .player-name { font-size: 12px; font-weight: bold; width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .player-casts { font-size: 11px; color: var(--text-muted); border-top: 1px solid #2a2a30; padding-top: 6px; display: flex; justify-content: space-between; }
-        .player-toggles { display: flex; gap: 15px; font-size: 11px; margin-top: 4px; }
-        .player-toggles label { cursor: pointer; display: flex; align-items: center; gap: 4px; }
+        .player-header img { width: 28px; height: 28px; border-radius: 50%; }
+        .player-name { font-size: 11px; font-weight: bold; width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .player-casts { font-size: 10px; color: var(--text-muted); border-top: 1px solid #25252b; padding-top: 6px; display: flex; justify-content: space-between; }
+        .player-toggles { display: flex; gap: 15px; font-size: 10px; margin-top: 2px; }
+        .player-toggles label { cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: bold; }
         
         .blue-team { border-left: 3px solid #00aaff; }
         .red-team { border-left: 3px solid #cc0000; }
@@ -77,31 +94,43 @@
 </head>
 <body>
 
-<div class="top-bar">
-    <input type="text" id="gameName" placeholder="Game Name">
-    <input type="text" id="tagLine" placeholder="Tagline">
-    <button onclick="executePipeline()">Sync Match Data</button>
+<nav class="navbar">
+    <div class="logo-container">
+        <img src="emily.png" alt="Logo">
+        <span>KDCanvas</span>
+    </div>
+    <div class="nav-search" id="navSearch">
+        <input type="text" id="navGameName" placeholder="Game Name">
+        <input type="text" id="navTagLine" placeholder="Tagline">
+        <button onclick="triggerSearch(true)">Search</button>
+    </div>
+</nav>
+
+<div class="hero-section" id="heroSection">
+    <div class="hero-title">Experience the new era of<br><span>League Stats</span></div>
+    <div class="hero-search-wrapper">
+        <input type="text" id="heroGameName" placeholder="Game Name">
+        <input type="text" id="heroTagLine" placeholder="# Tagline">
+        <button onclick="triggerSearch(false)">.GG</button>
+    </div>
+    <div id="status"></div>
 </div>
 
-<div id="status">Awaiting input...</div>
-
-<div class="dashboard">
+<div class="dashboard" id="dashboardSection">
     <div class="panel">
-        <div class="panel-header">Match History (Standard SR)</div>
+        <div class="panel-header">Match History</div>
         <div class="panel-content" id="matchList"></div>
     </div>
     
     <div class="center-col">
         <canvas id="mapCanvas" width="500" height="500"></canvas>
-        <div class="stats-grid" id="statsGrid">
-            <!-- Dynamic Advanced Stats Render Here -->
-        </div>
+        <div class="stats-grid" id="statsGrid"></div>
     </div>
     
     <div class="panel">
-        <div class="panel-header" id="detailHeader">Match Details</div>
+        <div class="panel-header" id="detailHeader">Live Match Data</div>
         <div class="panel-content" id="playerList">
-            <div style="color: var(--text-muted); text-align: center; font-size: 13px; margin-top: 20px;">Select a match to view.</div>
+            <div style="color: var(--text-muted); text-align: center; font-size: 13px; margin-top: 20px;">Select a match to load telemetry</div>
         </div>
     </div>
 </div>
@@ -111,7 +140,7 @@
     const ctx = canvas.getContext('2d');
     const RIOT_MAP_MAX = 15000; 
     const TARGET_MATCH_COUNT = 50;
-    const VALID_QUEUES = [400, 420, 430, 440, 490, 700]; // Standard SR only
+    const VALID_QUEUES = [400, 420, 430, 440, 490, 700];
 
     let matchIdsList = [];
     let matchData = {}; 
@@ -122,7 +151,6 @@
     let queueActive = false;
     let currentRenderId = 0;
 
-    // Static Asset Maps
     let itemMap = {};
     let perkMap = {};
     let imageCache = {};
@@ -140,7 +168,7 @@
             pData.forEach(p => {
                 if (p.id) perkMap[p.id] = { name: p.name, icon: parseCDragonPath(p.iconPath) };
             });
-        } catch (e) { console.error("Asset Map Failure", e); }
+        } catch (e) { console.error("Asset load failure", e); }
     }
 
     function parseCDragonPath(localPath) {
@@ -149,16 +177,39 @@
         return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/${cleanPath}`;
     }
 
-    async function executePipeline() {
-        const gameName = document.getElementById('gameName').value;
-        const tagLine = document.getElementById('tagLine').value;
+    function triggerSearch(fromNav) {
+        let gName, tLine;
+        if (fromNav) {
+            gName = document.getElementById('navGameName').value;
+            tLine = document.getElementById('navTagLine').value;
+        } else {
+            gName = document.getElementById('heroGameName').value;
+            tLine = document.getElementById('heroTagLine').value;
+        }
+
+        if (!gName || !tLine) return;
+
+        // Transition UI State
+        document.getElementById('heroSection').style.display = 'none';
+        document.getElementById('navSearch').style.display = 'flex';
+        document.getElementById('dashboardSection').style.display = 'grid';
+        
+        // Sync Inputs
+        document.getElementById('navGameName').value = gName;
+        document.getElementById('navTagLine').value = tLine;
+        document.getElementById('heroGameName').value = gName;
+        document.getElementById('heroTagLine').value = tLine;
+
+        executePipeline(gName, tLine);
+    }
+
+    async function executePipeline(gameName, tagLine) {
         const status = document.getElementById('status');
-
-        if (!gameName || !tagLine) return;
-
+        
         if (Object.keys(itemMap).length === 0) {
-            status.innerText = "Synchronizing CDN Assets...";
+            document.getElementById('detailHeader').innerText = "Syncing CDN Assets...";
             await loadStaticAssets();
+            document.getElementById('detailHeader').innerText = "Live Match Data";
         }
 
         queueActive = false;
@@ -169,46 +220,39 @@
         
         document.getElementById('matchList').innerHTML = '';
         document.getElementById('statsGrid').innerHTML = '';
-        document.getElementById('playerList').innerHTML = '';
+        document.getElementById('playerList').innerHTML = '<div style="color: var(--text-muted); text-align: center; font-size: 13px; margin-top: 20px;">Caching matches...</div>';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         try {
-            status.innerText = "Resolving Riot ID...";
             const accountRes = await fetch(`/api/account/${gameName}/${tagLine}`);
             const accountData = await accountRes.json();
-            if (!accountData.puuid) throw new Error("Account API rejection.");
+            if (!accountData.puuid) throw new Error("Account resolution failed.");
             currentPuuid = accountData.puuid;
 
-            status.innerText = "Fetching Match Pool...";
             const matchRes = await fetch(`/api/matches/${currentPuuid}`);
             matchIdsList = await matchRes.json();
 
-            status.innerText = `Filtering standard queues to target ${TARGET_MATCH_COUNT} matches...`;
             queueActive = true;
             processQueue(0);
-        } catch (error) { status.innerText = "Execution failed: " + error.message; }
+        } catch (error) { 
+            document.getElementById('playerList').innerHTML = `<div style="color: var(--loss-red); text-align: center; font-size: 13px; margin-top: 20px;">${error.message}</div>`;
+        }
     }
 
     async function processQueue(index) {
         if (!queueActive || validMatchCount >= TARGET_MATCH_COUNT || index >= matchIdsList.length) {
-            if (queueActive) {
-                document.getElementById('status').innerText = `Data cache complete. Captured ${validMatchCount} valid SR matches.`;
-                compileAdvancedStats();
-            }
+            if (queueActive) compileAdvancedStats();
             return;
         }
 
         const matchId = matchIdsList[index];
-        const status = document.getElementById('status');
         
         try {
-            status.innerText = `Parsing queue parameters [Index ${index}] | Valid cache: ${validMatchCount}/${TARGET_MATCH_COUNT}`;
-            
             const detailsRes = await fetch(`/api/match/${matchId}`);
             const details = await detailsRes.json();
             
             if (!VALID_QUEUES.includes(details.info.queueId)) {
-                setTimeout(() => processQueue(index + 1), 100);
+                setTimeout(() => processQueue(index + 1), 50);
                 return;
             }
 
@@ -216,9 +260,6 @@
 
             const timelineRes = await fetch(`/api/timeline/${matchId}`);
             const timeline = await timelineRes.json();
-
-            const participantInfo = timeline.info.participants.find(p => p.puuid === currentPuuid);
-            if (!participantInfo) throw new Error("Missing active participant.");
 
             for (let pId = 1; pId <= 10; pId++) {
                 matchData[matchId].playerEvents[pId] = { kills: [], deaths: [] };
@@ -245,7 +286,7 @@
             console.error(`Discard index ${index}:`, e);
         }
 
-        setTimeout(() => processQueue(index + 1), 500);
+        setTimeout(() => processQueue(index + 1), 250);
     }
 
     function appendMatchCard(matchId, details) {
@@ -254,7 +295,7 @@
 
         const isWin = pStats.win;
         const colorHtml = isWin ? `color: var(--win-green);` : `color: var(--loss-red);`;
-        const textHtml = isWin ? 'VICTORY' : 'DEFEAT';
+        const textHtml = isWin ? 'WIN' : 'LOSS';
         
         const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${pStats.championId}.png`;
         const divKda = Math.max(1, pStats.deaths);
@@ -273,16 +314,16 @@
         div.innerHTML = `
             <div class="match-meta">
                 <span style="color: var(--text-muted);">Match ${validMatchCount}</span>
-                <span style="${colorHtml} font-weight: bold;">${textHtml}</span>
+                <span style="${colorHtml}">${textHtml}</span>
             </div>
             <div class="match-info">
-                <img src="${iconUrl}" alt="Champ">
+                <img src="${iconUrl}">
                 <div style="display:flex; flex-direction: column;">
                     <span class="match-kda">${pStats.kills} / ${pStats.deaths} / ${pStats.assists}</span>
-                    <span style="font-size: 11px; color: ${kColor}; font-weight: bold;">KDA ${rawKda.toFixed(2)}</span>
+                    <span style="font-size: 11px; color: ${kColor}; font-weight: bold;">${rawKda.toFixed(2)} KDA</span>
                 </div>
             </div>
-            <button class="btn-view" onclick="displayDetailedMatch('${matchId}')">LOAD MAP DATA</button>
+            <button class="btn-view" onclick="displayDetailedMatch('${matchId}')">View Data</button>
         `;
         document.getElementById('matchList').appendChild(div);
     }
@@ -299,7 +340,6 @@
             const myTeam = me.teamId;
             const won = me.win;
 
-            // Opponents
             match.participants.filter(p => p.teamId !== myTeam).forEach(opp => {
                 const cId = opp.championId;
                 if (!oppStats[cId]) oppStats[cId] = { wins: 0, games: 0, type: 'champ', id: cId };
@@ -307,7 +347,6 @@
                 if (won) oppStats[cId].wins++;
             });
 
-            // Items (Core items >= 1500g)
             for(let i=0; i<6; i++) {
                 const itemId = me[`item${i}`];
                 if (itemId && itemMap[itemId] && itemMap[itemId].price >= 1500) {
@@ -317,7 +356,6 @@
                 }
             }
 
-            // Keystone Rune
             if (me.perks && me.perks.styles && me.perks.styles[0].selections) {
                 const perkId = me.perks.styles[0].selections[0].perk;
                 if (perkId && perkMap[perkId]) {
@@ -331,22 +369,35 @@
         const grid = document.getElementById('statsGrid');
         grid.innerHTML = '';
 
-        grid.appendChild(buildStatBlock("Best Matchup", getExtremes(oppStats, true, 2), 'var(--win-green)', 'stat-card-circle'));
-        grid.appendChild(buildStatBlock("Worst Matchup", getExtremes(oppStats, false, 2), 'var(--loss-red)', 'stat-card-circle'));
-        grid.appendChild(buildStatBlock("Best Core Item", getExtremes(itmStats, true, 3), 'var(--win-green)'));
-        grid.appendChild(buildStatBlock("Worst Core Item", getExtremes(itmStats, false, 3), 'var(--loss-red)'));
-        grid.appendChild(buildStatBlock("Best Keystone", getExtremes(rneStats, true, 2), 'var(--win-green)', 'stat-card-circle'));
-        grid.appendChild(buildStatBlock("Worst Keystone", getExtremes(rneStats, false, 2), 'var(--loss-red)', 'stat-card-circle'));
+        // Row 1: Matchups
+        grid.appendChild(buildStatBlock("Common Matchup", getStatFilter(oppStats, 'common', 1), '#fff', 'stat-card-circle'));
+        grid.appendChild(buildStatBlock("Best Matchup", getStatFilter(oppStats, 'best', 2), 'var(--win-green)', 'stat-card-circle'));
+        grid.appendChild(buildStatBlock("Worst Matchup", getStatFilter(oppStats, 'worst', 2), 'var(--loss-red)', 'stat-card-circle'));
+        
+        // Row 2: Runes
+        grid.appendChild(buildStatBlock("Common Rune", getStatFilter(rneStats, 'common', 1), '#fff', 'stat-card-circle'));
+        grid.appendChild(buildStatBlock("Best Rune", getStatFilter(rneStats, 'best', 2), 'var(--win-green)', 'stat-card-circle'));
+        grid.appendChild(buildStatBlock("Worst Rune", getStatFilter(rneStats, 'worst', 2), 'var(--loss-red)', 'stat-card-circle'));
+
+        // Row 3: Items
+        grid.appendChild(buildStatBlock("Common Item", getStatFilter(itmStats, 'common', 1), '#fff'));
+        grid.appendChild(buildStatBlock("Best Item", getStatFilter(itmStats, 'best', 2), 'var(--win-green)'));
+        grid.appendChild(buildStatBlock("Worst Item", getStatFilter(itmStats, 'worst', 2), 'var(--loss-red)'));
     }
 
-    function getExtremes(statMap, isBest, minGames) {
-        let arr = Object.values(statMap).filter(i => i.games >= minGames);
-        if (arr.length === 0) arr = Object.values(statMap);
+    function getStatFilter(statMap, mode, minGames) {
+        let arr = Object.values(statMap);
         if (arr.length === 0) return null;
         
         arr.forEach(i => i.rate = i.wins / i.games);
-        arr.sort((a, b) => isBest ? (b.rate - a.rate || b.games - a.games) : (a.rate - b.rate || b.games - a.games));
-        return arr[0];
+        let filtered = arr.filter(i => i.games >= minGames);
+        if (filtered.length === 0) filtered = arr; 
+
+        if (mode === 'common') filtered.sort((a, b) => b.games - a.games || b.rate - a.rate);
+        else if (mode === 'best') filtered.sort((a, b) => b.rate - a.rate || b.games - a.games);
+        else if (mode === 'worst') filtered.sort((a, b) => a.rate - b.rate || b.games - a.games);
+        
+        return filtered[0];
     }
 
     function buildStatBlock(title, dataObj, colorHex, extraClass = '') {
@@ -354,7 +405,7 @@
         div.className = `stat-card ${extraClass}`;
         
         if (!dataObj) {
-            div.innerHTML = `<div class="stat-info"><span class="stat-title">${title}</span><span class="stat-name" style="color:var(--text-muted)">N/A</span></div>`;
+            div.innerHTML = `<div class="stat-info"><span class="stat-title">${title}</span><span class="stat-name" style="color:var(--text-muted)">Awaiting Data</span></div>`;
             return div;
         }
 
@@ -377,7 +428,7 @@
             <div class="stat-info">
                 <span class="stat-title">${title}</span>
                 <span class="stat-name" title="${name}">${name}</span>
-                <span class="stat-val" style="color:${colorHex}; font-weight:bold;">${rate}% <span style="color:var(--text-muted); font-size:10px; font-weight:normal;">(${dataObj.wins}W - ${dataObj.games - dataObj.wins}L)</span></span>
+                <span class="stat-val" style="color:${colorHex};">${rate}% <span style="color:var(--text-muted); font-size:9px; font-weight:normal;">(${dataObj.wins}W-${dataObj.games - dataObj.wins}L)</span></span>
             </div>
         `;
         return div;
@@ -425,15 +476,15 @@
                     <img src="${iconUrl}">
                     <div class="player-info">
                         <span class="player-name" title="${riotId}">${riotId}</span>
-                        <span class="player-kda">${p.kills}/${p.deaths}/${p.assists} <span class="player-decimal-kda">(${rawKda.toFixed(2)})</span></span>
+                        <span style="color: var(--text-muted); font-size: 11px;">${p.kills}/${p.deaths}/${p.assists} <span style="font-weight:bold; color: #fff;">(${rawKda.toFixed(2)})</span></span>
                     </div>
                 </div>
                 <div class="player-casts">
                     <span>Q: ${p.spell1Casts||0}</span> <span>W: ${p.spell2Casts||0}</span> <span>E: ${p.spell3Casts||0}</span> <span>R: ${p.spell4Casts||0}</span>
                 </div>
                 <div class="player-toggles">
-                    <label><input type="checkbox" ${kChecked} onchange="togglePlayerHeatmap(${pId}, 'kills', this.checked)"> Kills</label>
-                    <label><input type="checkbox" ${dChecked} onchange="togglePlayerHeatmap(${pId}, 'deaths', this.checked)"> Deaths</label>
+                    <label><input type="checkbox" ${kChecked} onchange="togglePlayerHeatmap(${pId}, 'kills', this.checked)"> K</label>
+                    <label><input type="checkbox" ${dChecked} onchange="togglePlayerHeatmap(${pId}, 'deaths', this.checked)"> D</label>
                 </div>
             `;
             targetCol.appendChild(card);
@@ -466,7 +517,6 @@
         if (!activeDetailedMatchId) return;
         const match = matchData[activeDetailedMatchId];
         
-        // Defined explicit colors based on user request
         const C_BLUE_KILL = 'rgba(0, 180, 255, 1.0)';
         const C_BLUE_DEATH = 'rgba(30, 80, 180, 1.0)';
         const C_RED_KILL = 'rgba(200, 20, 20, 1.0)';
@@ -506,7 +556,7 @@
             ctx.arc(pixelX, pixelY, radius, 0, Math.PI * 2, true);
             ctx.closePath();
             ctx.clip();
-            ctx.globalAlpha = 0.6; // 40% Transparency on image face
+            ctx.globalAlpha = 0.9; 
             ctx.drawImage(img, pixelX - radius, pixelY - radius, radius * 2, radius * 2);
             ctx.restore();
         }
