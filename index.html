@@ -34,10 +34,7 @@
         .nav-search button { background: #222; border: none; color: var(--accent-gold); padding: 8px 15px; font-weight: bold; cursor: pointer; }
         .nav-search button:hover { background: var(--accent-gold); color: #000; }
 
-        .hero-section { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; overflow: hidden; background: #0a0a0c; }
-        .hero-video { position: absolute; top: 50%; left: 50%; min-width: 100%; min-height: 100%; width: auto; height: auto; transform: translateX(-50%) translateY(-50%); z-index: 0; opacity: 0.25; object-fit: cover; }
-        .hero-content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
-        
+        .hero-section { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; background: radial-gradient(circle at 50% 40%, #1a1a24 0%, var(--bg-base) 60%); transition: all 0.5s ease-in-out; }
         .hero-title { font-size: 42px; font-weight: 800; margin-bottom: 30px; text-align: center; line-height: 1.1; }
         .hero-title span { color: var(--accent-gold); }
         .hero-search-wrapper { display: flex; background: #18181c; border: 1px solid #333; border-radius: 30px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 600px; }
@@ -103,19 +100,13 @@
 </nav>
 
 <div class="hero-section" id="heroSection">
-    <video autoplay loop muted playsinline class="hero-video">
-        <!-- Add your cinematic video file to the root directory and uncomment below -->
-        <!-- <source src="your_video.mp4" type="video/mp4"> -->
-    </video>
-    <div class="hero-content">
-        <div class="hero-title">Uncover your League performance</div>
-        <div class="hero-search-wrapper">
-            <input type="text" id="heroGameName" placeholder="Game Name">
-            <input type="text" id="heroTagLine" placeholder="# Tagline">
-            <button onclick="triggerSearch(false)">GO!</button>
-        </div>
-        <div id="status"></div>
+    <div class="hero-title">Uncover your League performance</div>
+    <div class="hero-search-wrapper">
+        <input type="text" id="heroGameName" placeholder="Game Name">
+        <input type="text" id="heroTagLine" placeholder="# Tagline">
+        <button onclick="triggerSearch(false)">GO!</button>
     </div>
+    <div id="status"></div>
 </div>
 
 <div class="dashboard" id="dashboardSection">
