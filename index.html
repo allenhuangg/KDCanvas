@@ -12,9 +12,11 @@
         button:disabled { cursor: not-allowed; opacity: 0.5; }
         
         .main-content { display: flex; gap: 20px; width: 100%; max-width: 1400px; justify-content: center; align-items: flex-start; }
-        .sidebar { display: flex; flex-direction: column; gap: 10px; width: 230px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 550px; }
+        .left-panel { display: flex; flex-direction: column; gap: 15px; width: 230px; }
+        .sidebar { display: flex; flex-direction: column; gap: 10px; background: #222; padding: 15px; border: 2px solid #444; overflow-y: auto; max-height: 400px; box-sizing: border-box; }
+        .stats-panel { background: #222; border: 2px solid #444; padding: 15px; box-sizing: border-box; }
+        .stats-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #e5c158; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 8px; }
         
-        /* Updated Left Sidebar Card Layout */
         .match-item { background: #333; padding: 10px; border: 1px solid #555; display: flex; flex-direction: column; gap: 6px; }
         .match-meta { display: flex; justify-content: space-between; font-size: 13px; align-items: center; border-bottom: 1px solid #444; padding-bottom: 4px; }
         .match-card-info { display: flex; align-items: center; gap: 8px; font-size: 11px; margin-top: 2px; }
@@ -39,6 +41,9 @@
         .player-toggles { display: flex; gap: 10px; font-size: 11px; margin-top: 2px; }
         .player-toggles label { cursor: pointer; display: flex; align-items: center; gap: 3px; }
 
+        .stat-row { display: flex; align-items: center; gap: 10px; background: #333; padding: 6px; border: 1px solid #555; margin-bottom: 5px; font-size: 12px; }
+        .stat-row img { width: 24px; height: 24px; border-radius: 50%; border: 1px solid #555; }
+
         #mapCanvas { 
             background-color: #0d1a24; 
             border: 2px solid #555; 
@@ -60,8 +65,16 @@
 <div id="status">Awaiting input...</div>
 
 <div class="main-content">
-    <div class="sidebar" id="matchList"></div>
+    <div class="left-panel">
+        <div class="sidebar" id="matchList"></div>
+        <div class="stats-panel">
+            <div class="stats-title">Highest Win Rate Against</div>
+            <div id="winrateStats" style="color: #777; font-size: 12px; text-align: center;">Awaiting match history data...</div>
+        </div>
+    </div>
+    
     <canvas id="mapCanvas" width="500" height="500"></canvas>
+    
     <div class="player-list-container" id="playerList">
         <div style="color: #777; text-align: center; font-size: 13px; width: 100%; margin-top: 50px;">Select a match to load players and heatmap</div>
     </div>
@@ -77,7 +90,6 @@
     let currentPuuid = '';
     let activeDetailedMatchId = null;
     let playerHeatmapToggles = {}; 
-    
     let queueActive = false;
 
     async function fetchData() {
@@ -86,6 +98,7 @@
         const status = document.getElementById('status');
         const matchListDiv = document.getElementById('matchList');
         const playerListDiv = document.getElementById('playerList');
+        const winrateStats = document.getElementById('winrateStats');
 
         if (!gameName || !tagLine) {
             status.innerText = "Error: Input required.";
@@ -98,6 +111,7 @@
         activeDetailedMatchId = null;
         matchListDiv.innerHTML = '';
         playerListDiv.innerHTML = '<div style="color: #777; text-align: center; font-size: 13px; width: 100%; margin-top: 50px;">Select a match to load players and heatmap</div>';
+        winrateStats.innerHTML = '<div style="color: #777; font-size: 12px; text-align: center;">Calculating stats...</div>';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         try {
@@ -113,7 +127,6 @@
 
             status.innerText = "Match list compiled. Executing background queue...";
             
-            // Build skeleton containers with descriptive state blocks
             for (let i = 0; i < matchIdsList.length; i++) {
                 const matchId = matchIdsList[i];
                 const div = document.createElement('div');
@@ -144,6 +157,7 @@
         if (!queueActive || index >= matchIdsList.length) {
             if (queueActive) {
                 document.getElementById('status').innerText = "All matches cached. Zero-latency navigation active.";
+                calculateWinRates();
             }
             return;
         }
@@ -179,10 +193,11 @@
                         const kId = event.killerId;
                         const vId = event.victimId;
                         if (kId && matchData[matchId].playerEvents[kId]) {
-                            matchData[matchId].playerEvents[kId].kills.push(event.position);
+                            // Store complete event object instead of coordinates
+                            matchData[matchId].playerEvents[kId].kills.push(event); 
                         }
                         if (vId && matchData[matchId].playerEvents[vId]) {
-                            matchData[matchId].playerEvents[vId].deaths.push(event.position);
+                            matchData[matchId].playerEvents[vId].deaths.push(event); 
                         }
                     }
                 });
@@ -191,7 +206,6 @@
             const targetPlayerStats = details.info.participants.find(p => p.puuid === currentPuuid);
             const isWin = targetPlayerStats ? targetPlayerStats.win : false;
             
-            // Render WIN/LOSS status
             const badge = document.getElementById(`badge-${matchId}`);
             if (badge) {
                 badge.innerHTML = isWin 
@@ -199,7 +213,6 @@
                     : '<span style="color: #e25c5c;">LOSS</span>';
             }
 
-            // Hydrate player card with champion avatar and individual KDA metrics
             const infoDiv = document.getElementById(`info-${matchId}`);
             if (infoDiv && targetPlayerStats) {
                 const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${targetPlayerStats.championId}.png`;
@@ -229,6 +242,9 @@
             const btn = document.getElementById(`btn-${matchId}`);
             if (btn) btn.disabled = false;
 
+            // Compute statistics incrementally as data caches
+            calculateWinRates();
+
         } catch (e) {
             const badge = document.getElementById(`badge-${matchId}`);
             if (badge) badge.innerHTML = '<span style="color: #999;">ERROR</span>';
@@ -238,6 +254,75 @@
         }
 
         setTimeout(() => processQueue(index + 1), 500);
+    }
+
+    // Aggregated Opposing Match-Up Winrate Parser
+    function calculateWinRates() {
+        const opponentStats = {};
+
+        Object.values(matchData).forEach(match => {
+            if (!match.participants || match.participants.length === 0) return;
+
+            const me = match.participants.find(p => p.puuid === currentPuuid);
+            if (!me) return;
+
+            const myTeam = me.teamId;
+            const won = me.win;
+
+            // Target the opposing team participants
+            const opponents = match.participants.filter(p => p.teamId !== myTeam);
+
+            opponents.forEach(opp => {
+                const champId = opp.championId;
+                if (!opponentStats[champId]) {
+                    opponentStats[champId] = { wins: 0, games: 0 };
+                }
+                opponentStats[champId].games += 1;
+                if (won) opponentStats[champId].wins += 1;
+            });
+        });
+
+        // Map and sort results
+        let list = Object.keys(opponentStats).map(champId => {
+            const stats = opponentStats[champId];
+            return {
+                championId: champId,
+                wins: stats.wins,
+                games: stats.games,
+                winrate: (stats.wins / stats.games) * 100
+            };
+        });
+
+        // Filter out single matchups to prioritize recurring counter matchups
+        let filtered = list.filter(item => item.games >= 2);
+        if (filtered.length === 0) filtered = list; // Fallback if no champions are fought repeatedly
+
+        filtered.sort((a, b) => b.winrate - a.winrate || b.games - a.games);
+
+        const winrateStatsDiv = document.getElementById('winrateStats');
+        if (filtered.length === 0) {
+            winrateStatsDiv.innerHTML = '<div style="color: #777; text-align: center;">No opponent data compiled.</div>';
+            return;
+        }
+
+        winrateStatsDiv.innerHTML = '';
+        const displayLimit = Math.min(3, filtered.length);
+        
+        for (let i = 0; i < displayLimit; i++) {
+            const item = filtered[i];
+            const iconUrl = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${item.championId}.png`;
+            
+            const row = document.createElement('div');
+            row.className = 'stat-row';
+            row.innerHTML = `
+                <img src="${iconUrl}" alt="Champ">
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-weight: bold; color: #57ca85;">${item.winrate.toFixed(0)}% Win Rate</span>
+                    <span style="color: #aaa; font-size: 10px;">Record: ${item.wins}W - ${item.games - item.wins}L</span>
+                </div>
+            `;
+            winrateStatsDiv.appendChild(row);
+        }
     }
 
     function displayMatchData(matchId) {
@@ -352,31 +437,55 @@
                 
                 if (!events || !participant) return;
                 
-                const isBlueTeam = participant.teamId === 100;
-                const killColor = isBlueTeam ? 'rgba(0, 150, 255, 0.85)' : 'rgba(255, 50, 50, 0.85)';
-                const deathColor = isBlueTeam ? 'rgba(0, 50, 150, 0.85)' : 'rgba(150, 0, 0, 0.85)';
+                // Color codes for borders
+                const killBorder = 'rgba(0, 255, 0, 0.9)'; 
+                const deathBorder = 'rgba(255, 0, 0, 0.9)';
                 
                 if (toggles.kills) {
-                    events.kills.forEach(pos => drawPoint(pos.x, pos.y, killColor));
+                    events.kills.forEach(event => {
+                        // Plot victim's champion icon for a kill event
+                        const victim = match.participants.find(p => p.participantId === event.victimId);
+                        const victimChampId = victim ? victim.championId : participant.championId;
+                        drawChampionIcon(event.position.x, event.position.y, victimChampId, killBorder);
+                    });
                 }
                 if (toggles.deaths) {
-                    events.deaths.forEach(pos => drawPoint(pos.x, pos.y, deathColor));
+                    events.deaths.forEach(event => {
+                        // Plot own champion icon for a death event
+                        drawPoint(event.position.x, event.position.y);
+                        drawChampionIcon(event.position.x, event.position.y, participant.championId, deathBorder);
+                    });
                 }
             });
         }
     }
 
-    function drawPoint(riotX, riotY, color) {
+    // Standard HTML5 Canvas Circular Image Renderer with Clipping Paths
+    function drawChampionIcon(riotX, riotY, championId, borderColor) {
         const pixelX = (riotX / RIOT_MAP_MAX) * canvas.width;
         const pixelY = canvas.height - ((riotY / RIOT_MAP_MAX) * canvas.height);
+        const radius = 12; // Diameter: 24px
 
-        ctx.beginPath();
-        ctx.arc(pixelX, pixelY, 6, 0, 2 * Math.PI);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        const img = new Image();
+        img.src = `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${championId}.png`;
+        
+        img.onload = () => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(pixelX, pixelY, radius, 0, Math.PI * 2, true);
+            ctx.closePath();
+            ctx.clip(); // Mask boundaries to force circular layout
+            
+            ctx.drawImage(img, pixelX - radius, pixelY - radius, radius * 2, radius * 2);
+            ctx.restore();
+
+            // Render high-intensity, color-coded team boundaries
+            ctx.beginPath();
+            ctx.arc(pixelX, pixelY, radius, 0, Math.PI * 2, true);
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+        };
     }
 </script>
 
