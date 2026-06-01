@@ -24,7 +24,8 @@
         ::-webkit-scrollbar-thumb:hover { background: #44444f; }
 
         .navbar { display: flex; align-items: center; justify-content: space-between; padding: 15px 30px; background: #0a0a0c; border-bottom: 1px solid var(--border-color); flex-shrink: 0; z-index: 10; }
-        .logo-container { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+        .logo-container { display: flex; align-items: center; gap: 12px; cursor: pointer; transition: opacity 0.2s; }
+        .logo-container:hover { opacity: 0.8; }
         .logo-container img { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--accent-gold); }
         .logo-container span { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
 
@@ -34,10 +35,13 @@
         .nav-search button { background: #222; border: none; color: var(--accent-gold); padding: 8px 15px; font-weight: bold; cursor: pointer; }
         .nav-search button:hover { background: var(--accent-gold); color: #000; }
 
-        .hero-section { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; background: radial-gradient(circle at 50% 40%, #1a1a24 0%, var(--bg-base) 60%); transition: all 0.5s ease-in-out; }
-        .hero-title { font-size: 42px; font-weight: 800; margin-bottom: 30px; text-align: center; line-height: 1.1; }
-        .hero-title span { color: var(--accent-gold); }
-        .hero-search-wrapper { display: flex; background: #18181c; border: 1px solid #333; border-radius: 30px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 600px; }
+        /* Updated Radial Spotlight Hero Background */
+        .hero-section { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; overflow: hidden; background: radial-gradient(circle at 50% 40%, #1e222b 0%, var(--bg-base) 55%); }
+        .hero-content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+        
+        .hero-title { font-size: 48px; font-weight: 800; margin-bottom: 35px; text-align: center; line-height: 1.2; letter-spacing: -0.5px; }
+        .hero-title span { color: var(--accent-gold); display: block; }
+        .hero-search-wrapper { display: flex; background: #18181c; border: 1px solid #333; border-radius: 30px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.6); width: 600px; }
         .hero-search-wrapper input { flex: 1; background: transparent; border: none; color: var(--text-main); padding: 18px 25px; font-size: 16px; outline: none; }
         .hero-search-wrapper input:first-child { flex: 1.5; border-right: 1px solid #333; }
         .hero-search-wrapper button { background: #222; border: none; color: var(--accent-gold); padding: 0 35px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -95,18 +99,20 @@
     <div class="nav-search" id="navSearch">
         <input type="text" id="navGameName" placeholder="Game Name">
         <input type="text" id="navTagLine" placeholder="Tagline">
-        <button onclick="triggerSearch(true)">GO!</button>
+        <button onclick="triggerSearch(true)">GO</button>
     </div>
 </nav>
 
 <div class="hero-section" id="heroSection">
-    <div class="hero-title">Uncover your League performance</div>
-    <div class="hero-search-wrapper">
-        <input type="text" id="heroGameName" placeholder="Game Name">
-        <input type="text" id="heroTagLine" placeholder="# Tagline">
-        <button onclick="triggerSearch(false)">GO!</button>
+    <div class="hero-content">
+        <div class="hero-title">Uncover your<br><span>League Performance</span></div>
+        <div class="hero-search-wrapper">
+            <input type="text" id="heroGameName" placeholder="Game Name">
+            <input type="text" id="heroTagLine" placeholder="# Tagline">
+            <button onclick="triggerSearch(false)">GO</button>
+        </div>
+        <div id="status"></div>
     </div>
-    <div id="status"></div>
 </div>
 
 <div class="dashboard" id="dashboardSection">
@@ -155,11 +161,14 @@
         document.getElementById('navSearch').style.display = 'none';
         document.getElementById('dashboardSection').style.display = 'none';
         document.getElementById('status').innerText = '';
+        document.getElementById('heroGameName').value = '';
+        document.getElementById('heroTagLine').value = '';
     }
 
     async function loadStaticAssets() {
         try {
-            const cRes = await fetch('https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champions.json');
+            // Corrected CDragon Path for Champions
+            const cRes = await fetch('https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-summary.json');
             const cData = await cRes.json();
             cData.forEach(c => { if (c.id) champMap[c.id] = c.name; });
 
@@ -177,15 +186,14 @@
         } catch (e) { console.error("Asset load failure", e); }
     }
 
-    function parseCDragonPath(path) {
-        if (!path) return '';
-        let p = path.toLowerCase();
-        if (p.includes('/assets/items/')) {
-            return `https://raw.communitydragon.org/latest/game${p.substring(p.indexOf('/assets/items/'))}`;
-        } else if (p.includes('/v1/perk-images/')) {
-            return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default${p.substring(p.indexOf('/v1/perk-images/'))}`;
+    // Robust Path Parser for CDragon
+    function parseCDragonPath(localPath) {
+        if (!localPath) return '';
+        let clean = localPath.toLowerCase();
+        if (clean.startsWith('/lol-game-data/assets/')) {
+            clean = clean.substring('/lol-game-data/assets/'.length);
         }
-        return '';
+        return `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/${clean}`;
     }
 
     function triggerSearch(fromNav) {
