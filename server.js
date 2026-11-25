@@ -12,13 +12,12 @@ const REGION = 'americas';
 const headers = { 'X-Riot-Token': RIOT_API_KEY };
 
 // Helper function to handle Riot API rate limits (HTTP 429) automatically
-// Upgraded, robust retry handler
 async function fetchWithRetry(url, options, retries = 3) {
     for (let i = 0; i < retries; i++) {
         try {
             const response = await fetch(url, options);
             
-            // Scenario 1: Riot Rate Limits (429)
+            //Riot Rate Limits 429
             if (response.status === 429) {
                 const retryAfter = parseInt(response.headers.get('retry-after')) || 2;
                 console.warn(`[429 Rate Limit Hit] Attempt ${i + 1}/${retries}. Waiting ${retryAfter}s...`);
@@ -26,18 +25,17 @@ async function fetchWithRetry(url, options, retries = 3) {
                 continue; // Retry
             }
             
-            // Scenario 2: Riot Server Crashes (500, 502, 503, 504)
+            //Riot Server Crashes 500, 502, 503, 504
             if (response.status >= 500 && response.status <= 504) {
                 console.warn(`[Riot Server Error ${response.status}] Attempt ${i + 1}/${retries}. Retrying in 2s...`);
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 continue; // Retry
             }
             
-            // Do not retry on permanent errors (400 Bad Request, 403 Forbidden, 404 Not Found)
             return response;
 
         } catch (networkError) {
-            // Scenario 3: Physical network drops, closed sockets, or DNS failures
+            // Physical network drops, closed sockets, or DNS failures
             console.warn(`[Network Offline/Error] ${networkError.message}. Attempt ${i + 1}/${retries}. Retrying in 2s...`);
             
             if (i === retries - 1) {
@@ -45,7 +43,7 @@ async function fetchWithRetry(url, options, retries = 3) {
             }
             
             await new Promise(resolve => setTimeout(resolve, 2000));
-            // Loop automatically retries
+            // Loop automatically retries!
         }
     }
     throw new Error('API Request failed: Max retries reached.');
